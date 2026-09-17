@@ -221,6 +221,9 @@ val memory = kmemory {
 val auth: AuthMemorySource = memory.authMemorySource()   // üretilen uzantı
 ```
 
+`storeFactory` **zorunludur**: verilmeden `kmemory { }` çağrılırsa kurulum
+`IllegalStateException` ile reddedilir (ilk kullanımda değil, kurulum anında).
+
 `KMemory.store(name)` dosya adı başına **tek** `DataStore` örneği tutar. Bu bir konfor değil
 zorunluluktur: DataStore aynı dosya için ikinci bir örnek kurulduğunda çalışma anında patlar.
 Üretilen sınıf bu yüzden `internal`'dır — dışa açılan tek yüzey `fun KMemory.<arayüzAdı>()`

@@ -53,12 +53,16 @@ Ek notlar:
   `PreferenceSerializationException` (store + key + orijinalin sınıf adı, `cause` YOK) olarak
   gider: kotlinx-serialization bozuk girdiyi hata mesajına gömdüğü için ham hata "dinleyici
   değerleri asla görmez" sözleşmesini ihlal ediyordu. Çağırana fırlatılan hata değişmedi
+- `kmemory { }` eksik `storeFactory`'yi **kurulum anında** net mesajlı bir
+  `IllegalStateException` ile reddeder; önceden `lateinit` erişimi
+  `UninitializedPropertyAccessException` fırlatıyordu
 - `annotations` KMP (android, jvm, iosArm64, iosSimulatorArm64); `KMemory` çalışma zamanı sınıfı
   JVM + Android kaynak kümesinde
 - Sürüm tabanı Zad ile hizalandı: Kotlin 2.3.21, KSP 2.3.9, datastore 1.2.0,
   kotlinx-serialization 1.9.0
 - Doğrulama hataları `compiler` modülündeki `ValidationTest` ile, üretilen kodun davranışı `sample`
-  modülündeki `SamplePreferencesTest` ile kapsanır
+  modülündeki `SamplePreferencesTest` / `FlowSamplePreferencesTest` ile kapsanır; `KMemory`
+  kurulumu, store tekilliği ve üretilen fabrika uzantısı `KMemoryTest` ile
 - Upstream artıkları kaldırıldı: `composeApp`, `iosApp`, `sampleAndroid`, `PreferencesFactory`,
   `PreferencesConstructor`, `DataStoreProvider`
 - Apache-2.0 korunur; upstream atfı `NOTICE` dosyasındadır

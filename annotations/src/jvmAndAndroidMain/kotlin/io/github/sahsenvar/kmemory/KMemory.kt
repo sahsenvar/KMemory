@@ -52,7 +52,11 @@ public class KMemory internal constructor(
 /** [KMemory] kurucusu. */
 public class KMemoryBuilder {
 
-    /** ZORUNLU. Dosya adindan bir [DataStore] uretir. */
+    /**
+     * ZORUNLU. Dosya adindan bir [DataStore] uretir.
+     *
+     * Verilmezse [build] kurulumu reddeder; bkz. [kmemory].
+     */
     public lateinit var storeFactory: (name: String) -> DataStore<Preferences>
 
     public var json: Json = Json
@@ -61,12 +65,27 @@ public class KMemoryBuilder {
 
     public val adapters: MutableList<ReturnAdapter> = mutableListOf()
 
-    internal fun build(): KMemory = KMemory(
-        storeFactory = storeFactory,
-        json = json,
-        listener = listener,
-        adapters = adapters.toList(),
-    )
+    /**
+     * Eksik [storeFactory] KURULUM aninda yakalanir.
+     *
+     * Kontrol olmadan da hata cikardi — `lateinit` erisimi patlardi — ama tipi
+     * `UninitializedPropertyAccessException`, mesaji ise "lateinit property storeFactory has
+     * not been initialized" olurdu: tuketiciye kutuphanenin ic detayini gosteren, nasil
+     * duzeltilecegini soylemeyen bir metin. [check] ayni ani yakalar, cozumu de yazar.
+     */
+    internal fun build(): KMemory {
+        check(this::storeFactory.isInitialized) {
+            "KMemory kurulamadi: storeFactory zorunludur. " +
+                "kmemory { storeFactory = { name -> ... } } seklinde verin."
+        }
+
+        return KMemory(
+            storeFactory = storeFactory,
+            json = json,
+            listener = listener,
+            adapters = adapters.toList(),
+        )
+    }
 }
 
 /**

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import io.github.sahsenvar.kmemory.kmemory
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -29,18 +30,24 @@ import kotlin.test.assertTrue
  */
 class FlowSamplePreferencesTest {
 
-    /** Her cagri AYRI bir gecici dizinde store acar; ayni dosya icin ikinci ornek patlar. */
-    private fun store(): DataStore<Preferences> {
-        val dir = createTempDirectory("kmemory-flow").toFile()
-        return PreferenceDataStoreFactory.createWithPath {
-            dir.resolve("flow_sample.preferences_pb").toOkioPath()
-        }
+    /**
+     * Kaynak URETILEN FABRIKA UZANTISINDAN kurulur — spec §6.1'in tuketiciye acilan TEK
+     * yuzeyi budur; boylece her test ayni zamanda `fun KMemory.flowSamplePreferences()`
+     * uzantisini da kosturur. Her cagri AYRI bir gecici dizin kullanir: ayni dosya icin
+     * ikinci bir DataStore ornegi calisma aninda patlar.
+     *
+     * Belirli bir store ornegi gereken tek yer asagidaki disk hatasi testidir; orasi sinifi
+     * bilerek elle kurar ve dogrudan constructor yolunu da calisir tutar.
+     */
+    private fun prefs(listener: PreferenceListener = PreferenceListener.None): FlowSamplePreferences {
+        val dizin = createTempDirectory("kmemory-flow").toFile()
+        return kmemory {
+            storeFactory = { name ->
+                PreferenceDataStoreFactory.createWithPath { dizin.resolve(name).toOkioPath() }
+            }
+            this.listener = listener
+        }.flowSamplePreferences()
     }
-
-    private fun prefs(
-        dataStore: DataStore<Preferences> = store(),
-        listener: PreferenceListener = PreferenceListener.None,
-    ) = FlowSamplePreferencesImpl(dataStore, Json, listener)
 
     // --- yazma / silme is yapiyor mu -------------------------------------------------------
 
@@ -162,7 +169,7 @@ class FlowSamplePreferencesTest {
                 reported += key to error
             }
         }
-        val p = prefs(dataStore = FailingDataStore, listener = listener)
+        val p = FlowSamplePreferencesImpl(FailingDataStore, Json, listener)
 
         // Toplanmayan akis hicbir sey RAPORLAMAZ; hata da olusmaz.
         p.writeCount(42)
