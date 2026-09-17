@@ -5,6 +5,7 @@ import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.SymbolProcessor
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.usecase.CollectFunctionsUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.GenerateReadFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GroupByKeyUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.ValidateInterfaceUseCase
 import io.github.semenciuccosmin.preferences.compiler.processor.Processor
@@ -12,8 +13,6 @@ import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateClearFunct
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateCompanionObjectUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateConstructorObjectUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateFunctionUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateGetFlowFunctionUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateGetFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateImplementationUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateImportsUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateSetFunctionUseCase
@@ -83,8 +82,7 @@ object KoinInitializer {
                         )
                     }
 
-                    factoryOf(::GenerateGetFunctionUseCase)
-                    factoryOf(::GenerateGetFlowFunctionUseCase)
+                    factoryOf(::GenerateReadFunctionUseCase)
                     factoryOf(::GenerateSetFunctionUseCase)
                     factoryOf(::GenerateClearFunctionUseCase)
                     factoryOf(::GenerateFunctionUseCase)
