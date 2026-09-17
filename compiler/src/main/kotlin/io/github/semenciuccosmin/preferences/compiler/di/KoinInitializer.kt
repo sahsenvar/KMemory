@@ -5,17 +5,17 @@ import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.SymbolProcessor
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.usecase.CollectFunctionsUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.GenerateEraseFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateReadFunctionUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.GenerateWriteFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GroupByKeyUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.ValidateInterfaceUseCase
 import io.github.semenciuccosmin.preferences.compiler.processor.Processor
-import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateClearFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateCompanionObjectUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateConstructorObjectUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateImplementationUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateImportsUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateSetFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GetPreferencesNameUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GetValueTypeAnnotationData
 import org.koin.core.context.startKoin
@@ -83,8 +83,8 @@ object KoinInitializer {
                     }
 
                     factoryOf(::GenerateReadFunctionUseCase)
-                    factoryOf(::GenerateSetFunctionUseCase)
-                    factoryOf(::GenerateClearFunctionUseCase)
+                    factoryOf(::GenerateWriteFunctionUseCase)
+                    factoryOf(::GenerateEraseFunctionUseCase)
                     factoryOf(::GenerateFunctionUseCase)
                     factoryOf(::GetPreferencesNameUseCase)
                     factoryOf(::GenerateCompanionObjectUseCase)
