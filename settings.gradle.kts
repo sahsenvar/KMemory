@@ -1,4 +1,4 @@
-rootProject.name = "KspPreferences"
+rootProject.name = "KMemory"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -33,8 +33,7 @@ plugins {
 }
 
 include(
-    ":composeApp",
     ":annotations",
     ":compiler",
-    ":sampleAndroid",
+    ":sample",
 )

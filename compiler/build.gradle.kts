@@ -8,16 +8,16 @@ mavenPublishing {
     signAllPublications()
 
     coordinates(
-        groupId = "io.github.semenciuccosmin",
-        artifactId = "preferences-compiler",
-        version = "2.0.0"
+        groupId = "io.github.sahsenvar",
+        artifactId = "kmemory-compiler",
+        version = "0.1.0"
     )
 
     pom {
-        name = "Preferences Compiler"
-        description = "This module contains the KSP processor for the KSP Preferences library. It is a separate module to avoid adding unnecessary dependencies to the main library."
+        name = "KMemory Compiler"
+        description = "This module contains the KSP processor for the KMemory library. It is a separate module to avoid adding unnecessary dependencies to the main library."
         inceptionYear = "2026"
-        url = "https://github.com/SemenciucCosmin/KspPreferences"
+        url = "https://github.com/sahsenvar/KMemory"
 
         licenses {
             license {
@@ -29,19 +29,17 @@ mavenPublishing {
 
         developers {
             developer {
-                id = "semenciuccosmin"
-                name = "Semenciuc Cosmin"
-                url = "https://github.com/SemenciucCosmin"
+                id = "sahsenvar"
+                name = "Sahan Senvar"
+                url = "https://github.com/sahsenvar"
             }
         }
 
         scm {
-            url = "https://github.com/SemenciucCosmin/KspPreferences"
+            url = "https://github.com/sahsenvar/KMemory"
         }
     }
 }
-
-
 
 dependencies {
     // KSP
@@ -53,6 +51,6 @@ dependencies {
     // KOTLIN
     implementation(libs.kotlinx.coroutines)
 
-    // KSP PREFERENCES MODULES
+    // KMEMORY MODULES
     implementation(projects.annotations)
 }

@@ -18,10 +18,13 @@ compose-bom = "2026.04.01"
 compose-multiplatform = "1.10.3"
 
 # DATA STORE
-data-store = "1.2.1"
+data-store = "1.2.0"
 
 # DETEKT
 detekt = "1.23.8"
+
+# KCTFORK
+kctfork = "0.13.0"
 
 # KOIN
 koin = "4.2.1"
@@ -30,10 +33,13 @@ koin = "4.2.1"
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
 kotlinx-immutableCollections = "0.4.0"
-kotlinx-serialization = "1.11.0"
+kotlinx-serialization = "1.9.0"
 
 # KSP
-ksp = "2.3.6"
+ksp = "2.3.9"
+
+# OKIO
+okio = "3.10.2"
 
 # PUBLISH
 publish = "0.36.0"
@@ -70,9 +76,14 @@ compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", v
 # DATA STORE
 data-store = { module = "androidx.datastore:datastore", version.ref = "data-store" }
 data-store-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "data-store" }
+datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "data-store" }
 
 # DETEKT
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
+
+# KCTFORK
+kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
+kctfork-ksp = { module = "dev.zacsweers.kctfork:ksp", version.ref = "kctfork" }
 
 # KOIN
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
@@ -90,6 +101,9 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 
 # KSP
 symbol-processing = { group = "com.google.devtools.ksp", name = "symbol-processing-api", version.ref = "ksp" }
+
+# OKIO
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 
 # TEST
 androidx-test-core = { module = "androidx.test:core", version.ref = "test-core" }

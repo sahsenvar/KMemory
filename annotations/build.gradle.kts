@@ -23,7 +23,7 @@ kotlin {
 }
 
 android {
-    namespace = "io.github.semenciuccosmin.preferences.annotations"
+    namespace = "io.github.sahsenvar.kmemory"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
 }
@@ -33,17 +33,17 @@ mavenPublishing {
     signAllPublications()
 
     coordinates(
-        groupId = "io.github.semenciuccosmin",
-        artifactId = "preferences-annotations",
-        version = "2.0.0"
+        groupId = "io.github.sahsenvar",
+        artifactId = "kmemory-annotations",
+        version = "0.1.0"
     )
 
     pom {
-        name = "Preferences Annotations"
+        name = "KMemory Annotations"
         description =
-            "This module contains the annotations used by the KSP Preferences library. It is a separate module to avoid adding unnecessary dependencies to the main library."
+            "This module contains the annotations used by the KMemory library. It is a separate module to avoid adding unnecessary dependencies to the main library."
         inceptionYear = "2026"
-        url = "https://github.com/SemenciucCosmin/KspPreferences"
+        url = "https://github.com/sahsenvar/KMemory"
 
         licenses {
             license {
@@ -55,14 +55,14 @@ mavenPublishing {
 
         developers {
             developer {
-                id = "semenciuccosmin"
-                name = "Semenciuc Cosmin"
-                url = "https://github.com/SemenciucCosmin"
+                id = "sahsenvar"
+                name = "Sahan Senvar"
+                url = "https://github.com/sahsenvar"
             }
         }
 
         scm {
-            url = "https://github.com/SemenciucCosmin/KspPreferences"
+            url = "https://github.com/sahsenvar/KMemory"
         }
     }
 }
