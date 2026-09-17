@@ -40,7 +40,7 @@ import org.koin.dsl.module
  */
 object KoinInitializer {
 
-    /** spec §9.1 — virgulle ayrilmis `ReturnAdapter` FQN listesi. */
+    /** spec §9.1 — virgulle ayrilmis `ReturnAdapter` FQN listesi. 0.1.0'da OKUNUR ama UYGULANMAZ. */
     private const val ADAPTERS_OPTION = "kmemory.adapters"
 
     /**
@@ -54,7 +54,7 @@ object KoinInitializer {
         codeGenerator: CodeGenerator,
         options: Map<String, String> = emptyMap(),
     ): Koin {
-        val registeredAdapterTypes = parseAdapterTypes(options)
+        warnUnsupportedAdapters(environmentLogger, options)
 
         return koinApplication {
             modules(
@@ -72,12 +72,7 @@ object KoinInitializer {
                     factoryOf(::RenderTypeUseCase)
                     factoryOf(::CollectFunctionsUseCase)
                     factoryOf(::GroupByKeyUseCase)
-                    factory {
-                        ValidateInterfaceUseCase(
-                            logger = get(),
-                            registeredAdapterTypes = registeredAdapterTypes,
-                        )
-                    }
+                    factoryOf(::ValidateInterfaceUseCase)
 
                     factoryOf(::GenerateReadFunctionUseCase)
                     factoryOf(::GenerateWriteFunctionUseCase)
@@ -98,11 +93,20 @@ object KoinInitializer {
         }.koin
     }
 
-    private fun parseAdapterTypes(options: Map<String, String>): Set<String> =
-        options[ADAPTERS_OPTION]
-            .orEmpty()
-            .split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toSet()
+    /**
+     * [ADAPTERS_OPTION] 0.1.0'da hicbir donus tipini gevsetmez (spec §4.1).
+     *
+     * Secenek yine de OKUNUR ve verildiginde uyari verilir: sessizce yok saymak, tuketicinin
+     * "tipimi tanittim, artik geciyor" sanmasina yol acar — bypass'in eski hali tam olarak boyle
+     * davraniyor, dogrulamayi gevsetip uretimi degistirmiyordu.
+     */
+    private fun warnUnsupportedAdapters(environmentLogger: KSPLogger, options: Map<String, String>) {
+        val value = options[ADAPTERS_OPTION]?.trim().orEmpty()
+        if (value.isEmpty()) return
+
+        Logger(environmentLogger).warn(
+            "kmemory.adapters henüz desteklenmiyor: 0.1.0'da hiçbir dönüş tipi gevşetilmez, " +
+                "ReturnAdapter bağlantısı 0.2.0'da gelecek (spec §4.1). Yok sayılan değer: '$value'."
+        )
+    }
 }

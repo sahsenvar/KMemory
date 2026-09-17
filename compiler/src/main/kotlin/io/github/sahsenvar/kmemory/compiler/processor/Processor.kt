@@ -39,9 +39,17 @@ internal class Processor(
         return emptyList()
     }
 
+    /**
+     * Anotasyon zorunlulugu ve uretim yalnizca SOYUT fonksiyonlara aittir.
+     *
+     * Govdesi olan bir arayuz fonksiyonu (`suspend fun isUserLoggedIn(): Boolean = ...`) kendi
+     * uygulamasini zaten tasir: uretilmesine gerek yoktur ve hicbir accessor anotasyonuna
+     * uymaz. Filtre TEK yerdedir ki dogrulamanin saydigi liste ile toplamanin gezdigi liste
+     * ayni olsun; ayrisirlarsa sayi karsilastirmasi yanlis arayuzleri reddeder.
+     */
     private fun processInterface(declaration: KSClassDeclaration) {
-        val declaredFunctions = declaration.getDeclaredFunctions().toList()
-        val functions = collectFunctionsUseCase(declaration)
+        val declaredFunctions = declaration.getDeclaredFunctions().filter { it.isAbstract }.toList()
+        val functions = collectFunctionsUseCase(declaredFunctions)
         val models = groupByKeyUseCase(functions)
 
         val valid = validateInterfaceUseCase(

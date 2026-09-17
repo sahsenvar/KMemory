@@ -1,6 +1,9 @@
 package io.github.sahsenvar.kmemory.compiler.usecase
 
+import com.google.devtools.ksp.isAbstract
+import com.google.devtools.ksp.isConstructor
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Modifier
@@ -18,8 +21,6 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
  */
 internal class ValidateInterfaceUseCase(
     private val logger: Logger,
-    /** `kmemory.adapters` KSP secenegindeki FQN'ler; bos olabilir. */
-    private val registeredAdapterTypes: Set<String>,
 ) {
 
     operator fun invoke(
@@ -32,10 +33,14 @@ internal class ValidateInterfaceUseCase(
         var valid = true
 
         // CollectFunctions anotasyonsuz fonksiyonu sessizce eler; fark buradan yakalanir.
+        // [declaredFunctions] YALNIZCA soyut fonksiyonlari tasir: govdesi olan bir uye kendi
+        // uygulamasini zaten getirir, anotasyon zorunlulugu tasimaz.
         if (declaredFunctions.size != functions.size) {
             logger.error("$name: her fonksiyon @Read/@Write/@Erase/@EraseAll'dan birini taşımalı", declaration)
             valid = false
         }
+
+        if (!validateAbstractMembers(declaration, functions)) valid = false
 
         if (functions.count { it.accessor == Accessor.ERASE_ALL } > 1) {
             logger.error("$name: birden fazla @EraseAll bildirilmiş", declaration)
@@ -87,11 +92,19 @@ internal class ValidateInterfaceUseCase(
         val valueType = if (returnsFlow) returned?.arguments?.firstOrNull()?.type?.resolve() else returned
         val builtIn = isBuiltInShape(model.accessor, outerFqName, valueType)
 
-        // spec §4.1 — yerlesik sekiller + kmemory.adapters ile tanitilanlar disi reddedilir.
-        if (!builtIn && outerFqName !in registeredAdapterTypes) {
+        // spec §4.1 — 0.1.0'da YALNIZCA yerlesik sekiller gecer.
+        //
+        // `kmemory.adapters` bypass'i buradan KALDIRILDI: dogrulamayi gevsetiyor ama uretimi hic
+        // degistirmiyordu; tanitilan tip dogrulamadan gecip uretimde yok sayiliyor ve tuketicide
+        // "return type is not a subtype" ile patliyordu. ReturnAdapter arayuzu ileriye donuk seam
+        // olarak KALIR, isleyici hicbir tipi gevsetmez.
+        if (!builtIn) {
             logger.error(
                 "$label: '$outerFqName' yerleşik bir dönüş şekli değil. " +
-                    "Bir ReturnAdapter yazıp kmemory.adapters KSP seçeneğiyle tanıtın (spec §4.1).",
+                    "Yerleşik şekiller — @Read: Flow<T?> ya da suspend fun (): T?; " +
+                    "@Write/@Erase/@EraseAll: suspend fun (): Unit. " +
+                    "Adaptör bağlantısı 0.2.0'da gelecek; 0.1.0'da kmemory.adapters hiçbir tipi " +
+                    "gevşetmez (spec §4.1).",
                 function,
             )
             valid = false
@@ -110,6 +123,73 @@ internal class ValidateInterfaceUseCase(
 
         return valid
     }
+
+    /**
+     * Uretilemeyen soyut uyeyi TUKETICIYE birakma (BULGU 2).
+     *
+     * Uretim yalnizca `@Read/@Write/@Erase/@EraseAll` tasiyan BILDIRILEN fonksiyonlardan olur.
+     * Supertype'tan miras alinip arayuzde yeniden bildirilmeyen bir soyut uye ne dogrulaniyor ne
+     * uretiliyordu: uretilen `*Impl` o uyeyi implemente etmemis oluyor, derleme TUKETICIDE ve hem
+     * de URETILEN dosyada patliyordu ("Class 'XImpl' is not abstract and does not implement
+     * abstract member"). Ayni delik soyut OZELLIKLERDE de acikti — fonksiyon sayimi ozellikleri
+     * hic gormez.
+     *
+     * Bu yuzden butun soyut uyeler (miras dahil) taranir ve uretilemeyen her biri icin NET bir
+     * hata verilir. BILDIRILEN fonksiyonlar tarama disidir: onlarin anotasyon zorunlulugu
+     * yukaridaki sayim kuralina aittir, iki kez raporlanmasinlar.
+     *
+     * Uyesi olmayan marker supertype'lar (Zad'in `MemorySource`'u tam olarak oyle) hicbir uye
+     * uretmedigi icin dogal olarak sessizdir.
+     */
+    private fun validateAbstractMembers(
+        declaration: KSClassDeclaration,
+        functions: List<FunctionModel>,
+    ): Boolean {
+        val interfaceName = declaration.simpleName.asString()
+        val ownFqName = declaration.qualifiedName?.asString()
+        val generated = functions.mapTo(mutableSetOf()) { it.name }
+        var valid = true
+
+        val inheritedFunctions = declaration.getAllFunctions()
+            .filter { it.isAbstract && !it.isConstructor() }
+            .filterNot { it.ownerFqName() == ownFqName }
+            // `equals`/`hashCode`/`toString` her arayuzun ustundedir ve uretilmez.
+            .filterNot { it.ownerFqName() in ANY_FQ_NAMES }
+
+        val abstractProperties = declaration.getAllProperties().filter { it.isAbstract() }
+
+        (inheritedFunctions + abstractProperties)
+            .filterNot { it.simpleName.asString() in generated }
+            .forEach { member ->
+                logger.error(memberError(interfaceName, ownFqName, member), declaration)
+                valid = false
+            }
+
+        return valid
+    }
+
+    /**
+     * Uretilemeyen soyut uyenin hata metni: hangi uye, nereden geldigi, ne yapilmasi gerektigi.
+     */
+    private fun memberError(interfaceName: String, ownFqName: String?, member: KSDeclaration): String {
+        val label = member.simpleName.asString()
+        val ownerFqName = member.ownerFqName()
+        val owner = (member.parentDeclaration as? KSClassDeclaration)?.simpleName?.asString() ?: "?"
+
+        val head = if (ownerFqName == ownFqName) {
+            "'$label' soyut üyesi üretilemez"
+        } else {
+            "'$owner.$label': miras alınan soyut üye üretilemez"
+        }
+
+        return "$interfaceName: $head. Üyeyi $interfaceName içinde yeniden bildirip " +
+            "@Read/@Write/@Erase/@EraseAll ile işaretleyin, ya da supertype'tan kaldırın. " +
+            "Üyesi olmayan marker supertype'lar sorun değildir."
+    }
+
+    /** Uyeyi bildiren tipin FQN'i; ust-duzey bildirimlerde `null`. */
+    private fun KSDeclaration.ownerFqName(): String? =
+        (parentDeclaration as? KSClassDeclaration)?.qualifiedName?.asString()
 
     private fun validateModel(declaration: KSClassDeclaration, model: PreferenceModel): Boolean {
         var valid = true
@@ -187,6 +267,9 @@ internal class ValidateInterfaceUseCase(
     private companion object {
         const val FLOW_FQ_NAME = "kotlinx.coroutines.flow.Flow"
         const val UNIT_FQ_NAME = "kotlin.Unit"
+
+        /** Her tipin ustundeki uyeler; uretime konu degildir. */
+        val ANY_FQ_NAMES = setOf("kotlin.Any", "java.lang.Object")
 
         /** kotlinx-serialization'in yerlesik serilestiricisi bulunan koleksiyon tipleri. */
         val SERIALIZABLE_CONTAINER_FQ_NAMES = setOf(

@@ -1,7 +1,5 @@
 package io.github.sahsenvar.kmemory.compiler.usecase
 
-import com.google.devtools.ksp.getDeclaredFunctions
-import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import io.github.sahsenvar.kmemory.annotation.Erase
 import io.github.sahsenvar.kmemory.annotation.EraseAll
@@ -12,12 +10,16 @@ import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
 import io.github.sahsenvar.kmemory.compiler.model.ReadShape
 
 /**
- * `@Preferences`'li bir arayuzun bildirilen fonksiyonlarini [FunctionModel] listesine cevirir.
+ * Bir `@Preferences` arayuzunun SOYUT fonksiyonlarini [FunctionModel] listesine cevirir.
+ *
+ * Girdi listesini kendisi TOPLAMAZ, disaridan alir: govdeli fonksiyonlarin elenmesi
+ * [io.github.sahsenvar.kmemory.compiler.processor.Processor]'de tek yerde yapilir, boylece
+ * dogrulamanin saydigi liste ile burada gezilen liste tanim geregi aynidir.
  *
  * Burada DOGRULAMA yapilmaz; anotasyon tasimayan fonksiyon sessizce elenir. Elenen fonksiyonu
  * hataya cevirmek [ValidateInterfaceUseCase]'in isidir ve bildirilen fonksiyon sayisi ile
  * donen model sayisinin karsilastirilmasiyla yapilir — bu yuzden buradaki siralama,
- * `getDeclaredFunctions()` siralamasini korur.
+ * girdi siralamasini korur.
  *
  * Tip HER ZAMAN [RenderTypeUseCase]'den gecer. Once `declaration.simpleName` aliniyordu; bu
  * tip argumanlarini ve nullability'yi dusurup `List<SearchHistory>`'yi `List`'e,
@@ -27,8 +29,9 @@ internal class CollectFunctionsUseCase(
     private val renderTypeUseCase: RenderTypeUseCase,
 ) {
 
-    operator fun invoke(declaration: KSClassDeclaration): List<FunctionModel> =
-        declaration.getDeclaredFunctions().mapNotNull(::toModel).toList()
+    /** @param declaredFunctions arayuzde BILDIRILEN soyut fonksiyonlar, bildirim sirasinda. */
+    operator fun invoke(declaredFunctions: List<KSFunctionDeclaration>): List<FunctionModel> =
+        declaredFunctions.mapNotNull(::toModel)
 
     private fun toModel(function: KSFunctionDeclaration): FunctionModel? {
         keyOf(function, Read::class.simpleName)?.let { key ->

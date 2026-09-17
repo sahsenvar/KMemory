@@ -17,4 +17,14 @@ internal class Logger(private val logger: KSPLogger) {
     fun error(message: String, node: KSNode? = null) {
         logger.error(message, node)
     }
+
+    /**
+     * Derlemeyi DUSURMEZ; yalnizca raporlar.
+     *
+     * Desteklenmeyen bir KSP secenegi icin kullanilir: secenegi sessizce yok saymak, kullanicinin
+     * "tanittim, artik calisiyor" sanmasina yol acar.
+     */
+    fun warn(message: String, node: KSNode? = null) {
+        logger.warn(message, node)
+    }
 }

@@ -157,14 +157,15 @@ Yerleşik dönüş şekilleri yalnızca şunlardır: `@Read` → `Flow<T?>` veya
   `Flow` döndürmek, çağıran `collect` etmezse **hiçbir şeyin olmaması** demektir. Bu tuzak
   varsayılan olarak dağıtılmaz.
 
-İstersen kapı açık: `ReturnAdapter` implemente edip `kmemory { adapters += … }` ile kaydedersin ve
-işlemciye `kmemory.adapters=kotlin.Result` KSP seçeneğiyle tanıtırsın.
+İleriye dönük kapı açık: `ReturnAdapter` arayüzü ve `kmemory { adapters += … }` alanı **seam
+olarak duruyor** — ama 0.1.0'da işleyiciye bağlı değil.
 
-> **0.1.0 sınırı:** `kmemory.adapters` şu an yalnızca **doğrulamayı gevşetir**; kod üretimi hâlâ
-> kanonik şekli (`Flow<T?>` / `T?` / `Unit`) üretir, adaptör kaydına göre sarmalamaz. Yani seam
-> arayüz düzeyinde vardır ama uçtan uca çalışmaz: tanıtılan bir tip doğrulamayı geçer, üretilen
-> `override` ise bildirilen tiple uyuşmadığı için tüketici modülde derlenmez. Ucu uca adaptör
-> desteği 0.2.0'a bırakıldı.
+> **0.1.0 sınırı:** `kmemory.adapters` **hiçbir dönüş tipini gevşetmez.** Seçenek okunur, verildiğinde
+> "henüz desteklenmiyor" uyarısı verilir, ve yerleşik olmayan her şekil yine derleme hatası olur.
+> Bypass bilerek kaldırıldı: doğrulamayı gevşetip üretimi hiç değiştirmiyordu, yani tanıtılan tip
+> doğrulamadan geçiyor ama üretilen `override` bildirilen tiple uyuşmadığı için **tüketici modülde**
+> patlıyordu. Ucu uca adaptör desteği 0.2.0'a bırakıldı; o gelene kadar derleme güvenliğinden
+> hiçbir şey kaybedilmiyor.
 
 ---
 
@@ -254,11 +255,15 @@ modülüne — aittir; anotasyona değil. Kütüphane bu kararı ne verir ne de 
 Aşağıdakilerin her biri KSP hatası üretir (`compiler` modülündeki `ValidationTest` hepsini mesaj
 metniyle birlikte doğrular):
 
-- her fonksiyon `@Read`/`@Write`/`@Erase`/`@EraseAll`'dan birini taşımalı
+- her **soyut** fonksiyon `@Read`/`@Write`/`@Erase`/`@EraseAll`'dan birini taşımalı — gövdesi olan
+  arayüz fonksiyonu (`suspend fun isUserLoggedIn(): Boolean = …`) kendi uygulamasını zaten taşır,
+  anotasyon zorunluluğu taşımaz ve üretilmez
+- üretilemeyen soyut üye: supertype'tan miras alınıp arayüzde yeniden bildirilmeyen soyut bir üye
+  (fonksiyon ya da özellik) net bir hata verir — hangi üye, hangi supertype'tan geldiği ve ne
+  yapılması gerektiği yazar. **Üyesi olmayan marker supertype'lar sorun değildir.**
 - arayüzde birden fazla `@EraseAll` bildirilemez
 - `@Write` tam 1 parametre almalı; `@Read`/`@Erase`/`@EraseAll` parametre almamalı
-- yerleşik olmayan (ve `kmemory.adapters` ile tanıtılmamış) dönüş şekli — `Result<Int>`,
-  `@Write`'ta `Flow<Unit>` vb.
+- yerleşik olmayan dönüş şekli — `Result<Int>`, `@Write`'ta `Flow<Unit>` vb.
 - aynı anahtar için farklı tipler bildirilmiş
 - yalnızca `@Erase` ile geçen anahtar: tip çıkarılamıyor, o anahtar için bir `@Read` veya `@Write`
   gerekli
@@ -272,7 +277,7 @@ metniyle birlikte doğrular):
 
 | Seçenek | Değer | Varsayılan | Anlam |
 |---|---|---|---|
-| `kmemory.adapters` | virgülle ayrılmış FQN listesi | boş | `ReturnAdapter`'ların karşıladığı dönüş tipleri. 0.1.0'da yalnızca doğrulamayı gevşetir (yukarıdaki sınıra bak). |
+| `kmemory.adapters` | virgülle ayrılmış FQN listesi | boş | `ReturnAdapter`'ların karşıladığı dönüş tipleri. **0.1.0'da uygulanmaz**: okunur, uyarı verilir, hiçbir tipi gevşetmez (yukarıdaki sınıra bak). |
 
 ```kotlin
 ksp {

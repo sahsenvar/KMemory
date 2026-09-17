@@ -37,8 +37,11 @@ Ek notlar:
 - `suspend` kuralı accessor'a değil dönüş şekline bağlıdır: `Flow` dönen suspend olamaz, dönmeyen
   suspend olmalı
 - Dışa açılan tek yüzey üretilen `fun KMemory.<arayüzAdı>()` uzantısıdır; `*Impl` sınıfı `internal`
-- `ReturnAdapter` + `kmemory.adapters` KSP seçeneği genişletme seam'i olarak eklendi; 0.1.0'da
-  yalnızca doğrulamayı gevşetir, kod üretimi henüz adaptörden geçmez
+- `ReturnAdapter` + `kmemory.adapters` KSP seçeneği yalnızca **ileriye dönük seam** olarak duruyor;
+  0.1.0'da işleyiciye bağlı değil: seçenek okunur ve uyarı verir, hiçbir dönüş tipini gevşetmez
+- Gövdesi olan (soyut olmayan) arayüz fonksiyonları anotasyon zorunluluğundan ve üretimden muaf
+- Üretilemeyen soyut üye (miras dahil, fonksiyon ya da özellik) artık sessizce bozuk kod üretmek
+  yerine net bir derleme hatası verir; üyesi olmayan marker supertype'lar etkilenmez
 - `annotations` KMP (android, jvm, iosArm64, iosSimulatorArm64); `KMemory` çalışma zamanı sınıfı
   JVM + Android kaynak kümesinde
 - Sürüm tabanı Zad ile hizalandı: Kotlin 2.3.21, KSP 2.3.9, datastore 1.2.0,

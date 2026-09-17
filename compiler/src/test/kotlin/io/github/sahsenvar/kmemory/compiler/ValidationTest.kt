@@ -3,6 +3,7 @@ package io.github.sahsenvar.kmemory.compiler
 import com.tschuchort.compiletesting.JvmCompilationResult
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
+import com.tschuchort.compiletesting.kspProcessorOptions
 import com.tschuchort.compiletesting.symbolProcessorProviders
 import com.tschuchort.compiletesting.useKsp2
 import io.github.sahsenvar.kmemory.compiler.processor.ProcessorProvider
@@ -220,6 +221,138 @@ class ValidationTest {
         result.classLoader.loadClass("fixture.TestPreferencesImpl")
     }
 
+    // --- govdeli fonksiyon, miras uye, adapter bypass -------------------------------------
+
+    @Test
+    fun `govdesi olan arayuz fonksiyonu uretimi engellemez`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readAuthToken(): Flow<String?>
+            @Write("k") suspend fun writeAuthToken(value: String)
+
+            // Zad'daki AuthMemorySource.isUserLoggedIn'in birebir sekli: govdesi var,
+            // uretilmesine gerek yok, hicbir accessor anotasyonuna uymuyor.
+            suspend fun isUserLoggedIn(): Boolean = readAuthToken().firstOrNull() != null
+            """,
+            extraImports = listOf("kotlinx.coroutines.flow.firstOrNull"),
+        )
+
+        // Saf sayi karsilastirmasi (declaredFunctions.size != functions.size) bu arayuzu
+        // tumden reddediyordu; anotasyon zorunlulugu yalnizca ABSTRACT uyelere aittir.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `bos marker supertype uretimi engellemez`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            supertype = "MemorySource",
+            extraDeclarations = "interface MemorySource",
+        )
+
+        // Zad'in MemorySource marker'i tam olarak boyle: uyesi yok, sorun da olmamali.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `supertype fonksiyonu net hata verir`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            supertype = "LegacySource",
+            extraDeclarations = """
+            interface LegacySource {
+                suspend fun eskiTemizle()
+            }
+            """,
+        )
+
+        // Uretilen Impl bu uyeyi implemente edemez. Hata TUKETICIDE, uretilen dosyada
+        // "is not abstract and does not implement" olarak cikiyordu; beklenen, kutuphanenin
+        // kendi kaynakta konumlanan NET mesaji.
+        assertError(result, "miras alınan soyut üye üretilemez")
+        assertContains(result.messages, "eskiTemizle")
+        assertContains(result.messages, "LegacySource")
+    }
+
+    @Test
+    fun `supertype ozelligi net hata verir`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            supertype = "HasName",
+            extraDeclarations = """
+            interface HasName {
+                val kullaniciAdi: String
+            }
+            """,
+        )
+
+        // Soyut OZELLIK de uretilemez; fonksiyon sayimi bunu hic gormuyordu.
+        assertError(result, "miras alınan soyut üye üretilemez")
+        assertContains(result.messages, "kullaniciAdi")
+        assertContains(result.messages, "HasName")
+    }
+
+    @Test
+    fun `supertype uyesi arayuzde yeniden bildirilince uretilir`() {
+        val result = compile(
+            body = """
+            @Read("k") override fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            supertype = "LegacySource",
+            extraDeclarations = """
+            interface LegacySource {
+                fun readK(): Flow<Int?>
+            }
+            """,
+        )
+
+        // Yukaridaki hata mesaji "uyeyi bu arayuzde yeniden bildirip isaretleyin" diyor;
+        // bu test o care'nin gercekten calistigini kanitlar, yoksa mesaj yalan olurdu.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `kmemory adapters tanitilan tipi gevsetmez`() {
+        val result = compile(
+            body = """
+            @Read("k") suspend fun readK(): Result<Int>
+            """,
+            processorOptions = mapOf("kmemory.adapters" to "kotlin.Result"),
+        )
+
+        // Bypass dogrulamayi gevsetiyor ama uretimi hic degistirmiyordu: tip dogrulamadan
+        // gecip uretimde yok sayiliyor, tuketicide patliyordu.
+        assertError(result, "yerleşik bir dönüş şekli değil")
+        assertContains(result.messages, "0.2.0")
+    }
+
+    @Test
+    fun `kmemory adapters secenegi desteklenmiyor uyarisi verir`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            processorOptions = mapOf("kmemory.adapters" to "kotlin.Result"),
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        assertContains(result.messages, "kmemory.adapters henüz desteklenmiyor")
+    }
+
     // --- altyapi -------------------------------------------------------------------------
 
     private fun assertError(result: JvmCompilationResult, message: String) {
@@ -227,23 +360,35 @@ class ValidationTest {
         assertContains(result.messages, message)
     }
 
-    /** [body] bir `@Preferences` arayuzunun govdesidir; gerisi sabit kalir. */
-    private fun compile(body: String): JvmCompilationResult {
-        val source = """
-            package fixture
-
-            import io.github.sahsenvar.kmemory.annotation.Erase
-            import io.github.sahsenvar.kmemory.annotation.EraseAll
-            import io.github.sahsenvar.kmemory.annotation.Preferences
-            import io.github.sahsenvar.kmemory.annotation.Read
-            import io.github.sahsenvar.kmemory.annotation.Write
-            import kotlinx.coroutines.flow.Flow
-
-            @Preferences(name = "test.preferences_pb")
-            interface TestPreferences {
-            ${body.trimIndent().prependIndent("    ")}
+    /**
+     * [body] bir `@Preferences` arayuzunun govdesidir; gerisi sabit kalir.
+     *
+     * @param supertype arayuzun turedigi tip; `null` ise supertype yazilmaz.
+     * @param extraDeclarations fixture dosyasina eklenen ust-duzey bildirimler (supertype'lar).
+     * @param extraImports temel import listesine eklenenler.
+     * @param processorOptions KSP islemci secenekleri (spec §9.1).
+     */
+    private fun compile(
+        body: String,
+        supertype: String? = null,
+        extraDeclarations: String = "",
+        extraImports: List<String> = emptyList(),
+        processorOptions: Map<String, String> = emptyMap(),
+    ): JvmCompilationResult {
+        val source = buildString {
+            appendLine("package fixture")
+            appendLine()
+            (BASE_IMPORTS + extraImports).forEach { appendLine("import $it") }
+            appendLine()
+            if (extraDeclarations.isNotBlank()) {
+                appendLine(extraDeclarations.trimIndent())
+                appendLine()
             }
-        """.trimIndent()
+            appendLine("""@Preferences(name = "test.preferences_pb")""")
+            appendLine("interface TestPreferences" + supertype?.let { " : $it" }.orEmpty() + " {")
+            appendLine(body.trimIndent().prependIndent("    "))
+            appendLine("}")
+        }
 
         return KotlinCompilation().apply {
             // useKsp2() KSP aracini kurar; symbolProcessorProviders ONCESINDE cagrilmali,
@@ -251,8 +396,20 @@ class ValidationTest {
             useKsp2()
             sources = listOf(SourceFile.kotlin("TestPreferences.kt", source))
             symbolProcessorProviders = mutableListOf(ProcessorProvider())
+            kspProcessorOptions = processorOptions.toMutableMap()
             inheritClassPath = true
             messageOutputStream = System.out
         }.compile()
+    }
+
+    private companion object {
+        val BASE_IMPORTS = listOf(
+            "io.github.sahsenvar.kmemory.annotation.Erase",
+            "io.github.sahsenvar.kmemory.annotation.EraseAll",
+            "io.github.sahsenvar.kmemory.annotation.Preferences",
+            "io.github.sahsenvar.kmemory.annotation.Read",
+            "io.github.sahsenvar.kmemory.annotation.Write",
+            "kotlinx.coroutines.flow.Flow",
+        )
     }
 }
