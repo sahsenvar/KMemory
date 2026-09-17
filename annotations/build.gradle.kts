@@ -1,3 +1,5 @@
+@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.publish)
@@ -10,14 +12,24 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
-    compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+    // KMemory calisma-zamani nesnesi paylasilan degistirilebilir bir store onbellegi tutuyor.
+    // 0.1.0'da atomicfu eklemek yerine bu yuzey JVM + Android'e sabitlendi; anotasyonlar,
+    // PreferenceListener ve ReturnAdapter commonMain'de kalir (iOS dahil tum hedefler).
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmAndAndroid") {
+                withAndroidTarget()
+                withJvm()
+            }
+        }
     }
 
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.data.store.preferences)
-            implementation(libs.kotlinx.coroutines)
+            // Uretilen kodun ve KMemoryBuilder'in imzalarinda gorundukleri icin api.
+            api(libs.data.store.preferences)
+            api(libs.kotlinx.coroutines)
+            api(libs.kotlinx.serialization.json)
         }
     }
 }
