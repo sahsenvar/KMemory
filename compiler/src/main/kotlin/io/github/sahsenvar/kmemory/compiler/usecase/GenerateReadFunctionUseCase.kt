@@ -29,16 +29,20 @@ internal class GenerateReadFunctionUseCase {
      * @return Sinif govdesine oldugu gibi eklenebilecek, 4 bosluk girintili Kotlin kaynagi.
      */
     operator fun invoke(model: PreferenceModel, function: FunctionModel): String {
-        // Imzadaki tip adi; override imzasi bildirilen tipe birebir uymak zorunda oldugu icin
-        // model'in cikarilmis tipi degil, fonksiyonun KENDI bildirdigi ad kullanilir.
-        val type = function.declaredTypeName ?: model.type.simpleName
-        val read = readExpression(model, type)
+        // Imzadaki tip, fonksiyonun KENDI bildirdigi tipin tam metnidir: tip argumanlari ve
+        // nullability dahil. Model'in cikarilmis tipi kullanilsaydi `Flow<List<String>?>`
+        // `Flow<List?>`'e iner ve override kirilirdi. Dogrulama `@Read` degerinin nullable
+        // olmasini garanti ettigi icin `?` metnin icinde zaten vardir; ayrica eklenmez.
+        val signatureType = function.declaredType?.source ?: "${model.type.simpleName}?"
+        // `decodeFromString<T>` null kabul etmez; ayni tipin nullability'siz hali kullanilir.
+        val decodeType = function.declaredType?.nonNull ?: model.type.simpleName
+        val read = readExpression(model, decodeType)
 
         return when (function.readShape) {
-            ReadShape.FLOW -> generateFlow(model, function, type, read)
+            ReadShape.FLOW -> generateFlow(model, function, signatureType, read)
             // readShape yalnizca READ disindaki erisimlerde null olur; bu kullanim yeri READ
             // oldugu icin null pratikte olusmaz, olustugunda suspend sekli guvenli varsayimdir.
-            ReadShape.SUSPEND, null -> generateSuspend(model, function, type, read)
+            ReadShape.SUSPEND, null -> generateSuspend(model, function, signatureType, read)
         }
     }
 
@@ -49,7 +53,7 @@ internal class GenerateReadFunctionUseCase {
         type: String,
         read: String,
     ): String = """
-        |    override fun ${function.name}(): Flow<$type?> =
+        |    override fun ${function.name}(): Flow<$type> =
         |        dataStore.data
         |            .map { prefs -> $read }
         |            .catch { error ->
@@ -65,7 +69,7 @@ internal class GenerateReadFunctionUseCase {
         type: String,
         read: String,
     ): String = """
-        |    override suspend fun ${function.name}(): $type? =
+        |    override suspend fun ${function.name}(): $type =
         |        try {
         |            dataStore.data.first().let { prefs -> $read }
         |        } catch (error: Throwable) {
@@ -80,9 +84,11 @@ internal class GenerateReadFunctionUseCase {
      * [PreferenceType.OBJECT] diskte JSON metni olarak durdugu icin once metin okunur, sonra
      * cozulur; `?.let` sayesinde anahtar yoksa cozme hic denenmez ve `null` doner.
      */
-    private fun readExpression(model: PreferenceModel, type: String): String =
+    private fun readExpression(model: PreferenceModel, decodeType: String): String =
         when (model.type) {
-            PreferenceType.OBJECT -> "prefs[${model.keyProperty}]?.let { json.decodeFromString<$type>(it) }"
+            PreferenceType.OBJECT ->
+                "prefs[${model.keyProperty}]?.let { json.decodeFromString<$decodeType>(it) }"
+
             else -> "prefs[${model.keyProperty}]"
         }
 }

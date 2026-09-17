@@ -19,6 +19,13 @@ KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-a
 - `@Read` iki şekli destekler: `Flow<T?>` ve `suspend fun (): T?`
 - Tip imzadan çıkarılır; `@StringPreference` ailesi kaldırıldı
 - `defaultValue` kaldırıldı; okumalar daima nullable
+- Bildirilen tip üretilen imzaya birebir taşınır: tip argümanları, nullability ve import'lar
+  dahil (`Flow<List<SearchHistory>?>`, `value: String?`)
+- `List` / `Set` / `Map` / `Collection` / `Array` / `Pair` / `Triple` kapsayıcıları desteklenir;
+  JSON metnine düşerler
+- Nullable `@Write` parametresine `null` yazmak anahtarı siler
+- Üretilen anahtar sabitlerinin adları çarpışmaz; uzun ortak önekli iki anahtar (örn.
+  `notification_settings_enabled` / `notification_settings_muted`) artık aynı sabite inmiyor
 - `Result<T>` ve `Flow<Unit>` sarmalamaları desteklenmiyor
 - Üretilen sınıf `Context` yerine `DataStore<Preferences>` alır
 - `PreferencesFactory` / `@ConstructedBy` / reflection kaldırıldı

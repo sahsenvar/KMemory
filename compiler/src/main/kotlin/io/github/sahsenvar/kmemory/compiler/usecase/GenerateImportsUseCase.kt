@@ -53,9 +53,13 @@ internal class GenerateImportsUseCase {
             // import secimi de AYNI varsayimi yapmak zorunda.
             if (reads.any { it.readShape != ReadShape.FLOW }) add(FLOW_FIRST)
             if (needsJson) add(JSON)
-            // Ayni pakette duran nesne tipi import edilmez; Kotlin bunu gereksiz bulmaz ama
-            // uretilen dosyayi kendi paketine import eden bir satir okunabilirligi bozar.
-            models.mapNotNull { it.objectTypeFqName }
+            // Imzalarda gorunen tiplerin import'lari; tip argumanlari dahil her seviye
+            // buradan gelir, cunku `Flow<Map<String, Profile>?>` imzasi `Profile`'i de
+            // gorunur kilmak zorunda. Ayni pakette duran tip import EDILMEZ: Kotlin bunu
+            // hata saymaz ama uretilen dosyayi kendi paketine import eden bir satir
+            // okunabilirligi bozar.
+            functions.mapNotNull { it.declaredType }
+                .flatMap { it.imports }
                 .filter { it.substringBeforeLast('.', "") != packageName }
                 .distinct()
                 .sorted()

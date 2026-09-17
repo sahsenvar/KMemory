@@ -28,23 +28,46 @@ internal class GenerateWriteFunctionUseCase {
      *   basinda ve sonunda satir sonu YOKTUR.
      */
     operator fun invoke(model: PreferenceModel, function: FunctionModel): String {
-        // Imzadaki tip adi; override imzasi bildirilen tipe birebir uymak zorunda oldugu icin
-        // model'in cikarilmis tipi degil, fonksiyonun KENDI bildirdigi parametre tipi
-        // kullanilir. WRITE'in tam bir parametresi oldugunu dogrulama garanti eder, bu yuzden
-        // fallback pratikte ulasilmazdir.
-        val type = function.declaredTypeName ?: model.type.simpleName
+        // Imzadaki tip, fonksiyonun KENDI bildirdigi parametre tipinin tam metnidir: tip
+        // argumanlari ve nullability dahil. `List<SearchHistory>` `List`'e ya da `String?`
+        // `String`'e indirgenirse uretilen fonksiyon "overrides nothing" ile patlar.
+        // WRITE'in tam bir parametresi oldugunu dogrulama garanti eder, bu yuzden fallback
+        // pratikte ulasilmazdir.
+        val parameterType = function.declaredType?.source ?: model.type.simpleName
+        val nullable = function.declaredType?.isNullable == true
 
-        return """
-            |    override suspend fun ${function.name}(value: $type) {
-            |        try {
-            |            dataStore.edit { prefs -> prefs[${model.keyProperty}] = ${storedExpression(model)} }
-            |            listener.onWrite(STORE_NAME, ${model.keyNameProperty})
-            |        } catch (error: Throwable) {
-            |            listener.onError(STORE_NAME, ${model.keyNameProperty}, error)
-            |            throw error
-            |        }
-            |    }
-        """.trimMargin()
+        return "    override suspend fun ${function.name}(value: $parameterType) {\n" +
+            "        try {\n" +
+            editBlock(model, nullable) + "\n" +
+            "            listener.onWrite(STORE_NAME, ${model.keyNameProperty})\n" +
+            "        } catch (error: Throwable) {\n" +
+            "            listener.onError(STORE_NAME, ${model.keyNameProperty}, error)\n" +
+            "            throw error\n" +
+            "        }\n" +
+            "    }"
+    }
+
+    /**
+     * `dataStore.edit { }` blogu.
+     *
+     * Nullable parametrede `prefs[key] = value` DERLENMEZ — `Preferences.Key<T>` null kabul
+     * etmez. Bu yuzden nullable yazmada `null` "anahtari sil" anlamina gelir: tek alternatif
+     * olan "null'i yok say" cagirani sessizce yaniltirdi, cunku `readX()` eski degeri
+     * dondurmeye devam ederdi.
+     */
+    private fun editBlock(model: PreferenceModel, nullable: Boolean): String {
+        if (!nullable) {
+            return "            dataStore.edit { prefs -> prefs[${model.keyProperty}] = ${storedExpression(model)} }"
+        }
+
+        return "            dataStore.edit { prefs ->\n" +
+            "                val stored = ${nullableStoredExpression(model)}\n" +
+            "                if (stored == null) {\n" +
+            "                    prefs.remove(${model.keyProperty})\n" +
+            "                } else {\n" +
+            "                    prefs[${model.keyProperty}] = stored\n" +
+            "                }\n" +
+            "            }"
     }
 
     /**
@@ -57,6 +80,13 @@ internal class GenerateWriteFunctionUseCase {
     private fun storedExpression(model: PreferenceModel): String =
         when (model.type) {
             PreferenceType.OBJECT -> "json.encodeToString(value)"
+            else -> "value"
+        }
+
+    /** [storedExpression]'in nullable karsiligi; `null` deger serilestirilmeye calisilmaz. */
+    private fun nullableStoredExpression(model: PreferenceModel): String =
+        when (model.type) {
+            PreferenceType.OBJECT -> "value?.let { json.encodeToString(it) }"
             else -> "value"
         }
 }

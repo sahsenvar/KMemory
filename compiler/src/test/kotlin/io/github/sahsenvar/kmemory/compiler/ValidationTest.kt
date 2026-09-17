@@ -158,6 +158,68 @@ class ValidationTest {
         assertError(result, "@Read değeri nullable olmalı")
     }
 
+    // --- tip sadakati ve anahtar adi carpismasi ------------------------------------------
+
+    @Test
+    fun `tip argumanli deger tam imzayla uretilir`() {
+        val result = compile(
+            """
+            @Read("k") fun readItems(): Flow<List<String>?>
+            @Write("k") suspend fun writeItems(value: List<String>)
+            """
+        )
+
+        // Tip argumani dusurulurse uretilen imza `Flow<List?>` / `value: List` olur ve
+        // "overrides nothing" ile derlenmez; OK kodu tam tipin korundugunun kanitidir.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `ic ice tip argumani korunur`() {
+        val result = compile(
+            """
+            @Read("k") fun readGroups(): Flow<Map<String, List<Int>>?>
+            @Write("k") suspend fun writeGroups(value: Map<String, List<Int>>)
+            """
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `nullable Write parametresi imzada korunur`() {
+        val result = compile(
+            """
+            @Read("k") fun readToken(): Flow<String?>
+            @Write("k") suspend fun writeToken(value: String?)
+            """
+        )
+
+        // Nullability dusurulurse uretilen `value: String` arayuzdeki `value: String?`'i
+        // override edemez.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `ilk 20 karakteri ayni olan iki anahtar catismaz`() {
+        val result = compile(
+            """
+            @Read("notification_settings_enabled") fun readEnabled(): Flow<Boolean?>
+            @Write("notification_settings_enabled") suspend fun writeEnabled(value: Boolean)
+            @Read("notification_settings_muted") fun readMuted(): Flow<Boolean?>
+            @Write("notification_settings_muted") suspend fun writeMuted(value: Boolean)
+            """
+        )
+
+        // Iki anahtarin alfanumerikleri ilk 20 karakterde AYNI ("NOTIFICATIONSETTINGS");
+        // sabit adi yalnizca bu onekten turerse companion "Conflicting declarations" verir.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
     // --- altyapi -------------------------------------------------------------------------
 
     private fun assertError(result: JvmCompilationResult, message: String) {

@@ -18,17 +18,15 @@ internal enum class ReadShape { FLOW, SUSPEND }
  * @property accessor Fonksiyonun tasidigi erisim anotasyonu.
  * @property key `@Read`/`@Write`/`@Erase` icin anahtar; `@EraseAll` icin `null`.
  * @property readShape Yalnizca [Accessor.READ] icin dolu.
- * @property declaredTypeName Deger tipinin kisa adi — READ icin `T`, WRITE icin parametre
- *   tipi. `@Erase`/`@EraseAll` imzasinda tip bulunmadigi icin onlarda `null`; bu durumda tip
- *   ayni anahtardaki diger fonksiyonlardan cikarilir.
- * @property declaredTypeFqName Ayni tipin tam nitelikli adi; nesne tiplerinin import'u ve
- *   tip catismasi dogrulamasi bunun uzerinden yapilir.
+ * @property declaredType Bildirilen deger tipi — READ icin `T`, WRITE icin parametre tipi.
+ *   `@Erase`/`@EraseAll` imzasinda tip bulunmadigi icin onlarda `null`; bu durumda tip ayni
+ *   anahtardaki diger fonksiyonlardan cikarilir. Kisa ad DEGIL [TypeRef] tutulur: uretilen
+ *   imza tip argumanlarini ve nullability'yi de tasimak zorundadir.
  */
 internal data class FunctionModel(
     val name: String,
     val accessor: Accessor,
     val key: String?,
     val readShape: ReadShape?,
-    val declaredTypeName: String?,
-    val declaredTypeFqName: String?,
+    val declaredType: TypeRef?,
 )

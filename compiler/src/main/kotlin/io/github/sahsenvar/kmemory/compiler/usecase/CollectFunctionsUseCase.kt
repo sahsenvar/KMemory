@@ -18,8 +18,14 @@ import io.github.sahsenvar.kmemory.compiler.model.ReadShape
  * hataya cevirmek [ValidateInterfaceUseCase]'in isidir ve bildirilen fonksiyon sayisi ile
  * donen model sayisinin karsilastirilmasiyla yapilir — bu yuzden buradaki siralama,
  * `getDeclaredFunctions()` siralamasini korur.
+ *
+ * Tip HER ZAMAN [RenderTypeUseCase]'den gecer. Once `declaration.simpleName` aliniyordu; bu
+ * tip argumanlarini ve nullability'yi dusurup `List<SearchHistory>`'yi `List`'e,
+ * `String?`'i `String`'e indiriyor ve uretilen sinifi derlenemez hale getiriyordu.
  */
-internal class CollectFunctionsUseCase {
+internal class CollectFunctionsUseCase(
+    private val renderTypeUseCase: RenderTypeUseCase,
+) {
 
     operator fun invoke(declaration: KSClassDeclaration): List<FunctionModel> =
         declaration.getDeclaredFunctions().mapNotNull(::toModel).toList()
@@ -34,8 +40,7 @@ internal class CollectFunctionsUseCase {
                 accessor = Accessor.READ,
                 key = key,
                 readShape = if (isFlow) ReadShape.FLOW else ReadShape.SUSPEND,
-                declaredTypeName = value?.declaration?.simpleName?.asString(),
-                declaredTypeFqName = value?.declaration?.qualifiedName?.asString(),
+                declaredType = renderTypeUseCase(value),
             )
         }
 
@@ -46,8 +51,7 @@ internal class CollectFunctionsUseCase {
                 accessor = Accessor.WRITE,
                 key = key,
                 readShape = null,
-                declaredTypeName = parameter?.declaration?.simpleName?.asString(),
-                declaredTypeFqName = parameter?.declaration?.qualifiedName?.asString(),
+                declaredType = renderTypeUseCase(parameter),
             )
         }
 
@@ -57,8 +61,7 @@ internal class CollectFunctionsUseCase {
                 accessor = Accessor.ERASE,
                 key = key,
                 readShape = null,
-                declaredTypeName = null,
-                declaredTypeFqName = null,
+                declaredType = null,
             )
         }
 
@@ -68,8 +71,7 @@ internal class CollectFunctionsUseCase {
                 accessor = Accessor.ERASE_ALL,
                 key = null,
                 readShape = null,
-                declaredTypeName = null,
-                declaredTypeFqName = null,
+                declaredType = null,
             )
         }
 

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
+import io.github.sahsenvar.kmemory.sample.model.SearchHistorySample
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -94,5 +95,38 @@ class SamplePreferencesTest {
         assertTrue(seen[0].startsWith("w:3f1c0b2e-0001"))
         assertTrue(seen[1].startsWith("e:3f1c0b2e-0001"))
         assertEquals("e:null", seen[2])
+    }
+
+    @Test
+    fun `tip argumanli liste yazilip okunur`() = runTest {
+        val p = prefs()
+        p.writeItems(listOf("a", "b"))
+        assertEquals(listOf("a", "b"), p.readItems().first())
+    }
+
+    @Test
+    fun `nullable yazma null verilince anahtari siler`() = runTest {
+        val p = prefs()
+        p.writeToken("abc")
+        assertEquals("abc", p.readToken())
+        p.writeToken(null)
+        assertNull(p.readToken())
+    }
+
+    @Test
+    fun `ilk 20 karakteri ayni iki anahtar birbirini ezmez`() = runTest {
+        val p = prefs()
+        p.writeNotificationEnabled(true)
+        p.writeNotificationMuted(false)
+        assertEquals(true, p.readNotificationEnabled().first())
+        assertEquals(false, p.readNotificationMuted().first())
+    }
+
+    @Test
+    fun `baska paketteki tipin listesi yazilip okunur`() = runTest {
+        val p = prefs()
+        val history = listOf(SearchHistorySample("zad"), SearchHistorySample("kmemory"))
+        p.writeHistory(history)
+        assertEquals(history, p.readHistory().first())
     }
 }

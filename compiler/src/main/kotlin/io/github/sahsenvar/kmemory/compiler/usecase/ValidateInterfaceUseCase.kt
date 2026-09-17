@@ -4,6 +4,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Modifier
+import com.google.devtools.ksp.symbol.Variance
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.model.Accessor
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
@@ -112,7 +113,7 @@ internal class ValidateInterfaceUseCase(
 
     private fun validateModel(declaration: KSClassDeclaration, model: PreferenceModel): Boolean {
         var valid = true
-        val declaredTypes = model.functions.mapNotNull { it.declaredTypeFqName }.distinct()
+        val declaredTypes = model.functions.mapNotNull { it.declaredType?.qualified }.distinct()
 
         if (declaredTypes.size > 1) {
             logger.error("${model.key}: aynı anahtar için farklı tipler bildirilmiş: $declaredTypes", declaration)
@@ -129,21 +130,40 @@ internal class ValidateInterfaceUseCase(
     /**
      * spec §4.1 — yerlesik donus sekilleri.
      *
-     * `@Read`: `Flow<T?>` ya da `T?`. T'nin kendisi jenerik OLAMAZ — spec §4 `List<T>`'yi
-     * dogrudan desteklemiyor — ve `Unit` olamaz. Bu sayede `Result<T>` gibi sarmalayicilar
-     * okuma tarafinda da yakalanir; aksi halde yalnizca "nullable olmali" hatasi verip
-     * nullable bir sarmalayiciyi (`Result<T>?`) tamamen gecirirdi.
+     * `@Read`: `Flow<T?>` ya da `T?`, T [isStorableShape]'e uymak kaydiyla.
      *
      * `@Write` / `@Erase` / `@EraseAll`: yalnizca `Unit`.
      */
     private fun isBuiltInShape(accessor: Accessor, outerFqName: String?, valueType: KSType?): Boolean =
         when (accessor) {
-            Accessor.READ -> valueType != null &&
-                valueType.arguments.isEmpty() &&
-                valueType.declaration.qualifiedName?.asString() != UNIT_FQ_NAME
-
+            Accessor.READ -> valueType != null && isStorableShape(valueType)
             else -> outerFqName == UNIT_FQ_NAME
         }
+
+    /**
+     * Okunan degerin diske yazilabilir bir tip olup olmadigi.
+     *
+     * Olcut "tip argumani tasimasin" DEGILDIR: o kural `List<String>` gibi kotlinx-serialization'in
+     * kutudan destekledigi koleksiyonlari da reddediyordu. Bunun yerine tip argumani tasiyan bir
+     * tip yalnizca TANINAN bir koleksiyon ise ve tum argumanlari da yazilabilir ise gecer. Boylece
+     * `Result<T>` gibi sarmalayicilar hala yakalanir — aksi halde yalnizca "nullable olmali"
+     * hatasi verip nullable bir sarmalayiciyi (`Result<T>?`) tamamen gecirirlerdi.
+     *
+     * Jenerik OLMAYAN tiplerde eskisi gibi davranilir: `Unit` disinda her sey gecer ve gecersiz
+     * bir tip uretilen kodun serilestirme hatasinda yakalanir.
+     */
+    private fun isStorableShape(type: KSType): Boolean {
+        val fqName = type.declaration.qualifiedName?.asString() ?: return false
+        if (fqName == UNIT_FQ_NAME) return false
+        if (type.arguments.isEmpty()) return true
+        if (fqName !in SERIALIZABLE_CONTAINER_FQ_NAMES) return false
+
+        return type.arguments.all { argument ->
+            // Yildiz izdusumunun somut bir tipi yoktur; serilestirilemez.
+            argument.variance != Variance.STAR &&
+                argument.type?.resolve()?.let(::isStorableShape) == true
+        }
+    }
 
     /**
      * Bildirilen fonksiyonlari modelleriyle eslestirir.
@@ -167,5 +187,16 @@ internal class ValidateInterfaceUseCase(
     private companion object {
         const val FLOW_FQ_NAME = "kotlinx.coroutines.flow.Flow"
         const val UNIT_FQ_NAME = "kotlin.Unit"
+
+        /** kotlinx-serialization'in yerlesik serilestiricisi bulunan koleksiyon tipleri. */
+        val SERIALIZABLE_CONTAINER_FQ_NAMES = setOf(
+            "kotlin.Array",
+            "kotlin.Pair",
+            "kotlin.Triple",
+            "kotlin.collections.Collection",
+            "kotlin.collections.List",
+            "kotlin.collections.Map",
+            "kotlin.collections.Set",
+        )
     }
 }

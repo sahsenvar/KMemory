@@ -12,6 +12,7 @@ import io.github.sahsenvar.kmemory.compiler.usecase.GenerateImportsUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateReadFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateWriteFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GroupByKeyUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.RenderTypeUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.ValidateInterfaceUseCase
 import org.koin.core.Koin
 import org.koin.core.module.dsl.factoryOf
@@ -68,6 +69,7 @@ object KoinInitializer {
                         )
                     }
 
+                    factoryOf(::RenderTypeUseCase)
                     factoryOf(::CollectFunctionsUseCase)
                     factoryOf(::GroupByKeyUseCase)
                     factory {

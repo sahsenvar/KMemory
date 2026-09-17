@@ -100,8 +100,14 @@ Tip **imzadan çıkarılır**; upstream'in `@StringPreference` / `@IntPreference
 `@Read`/`@Write`'tan alır.
 
 Desteklenen `T`: `String`, `Int`, `Long`, `Float`, `Double`, `Boolean` ve `@Serializable` işaretli
-herhangi bir tip (JSON metni olarak `String` alanında saklanır). `List<T>` doğrudan desteklenmez —
-sarmalayıcı bir `@Serializable data class` kullan.
+herhangi bir tip (JSON metni olarak `String` alanında saklanır). Ayrıca kotlinx-serialization'ın
+kutudan desteklediği kapsayıcılar — `List`, `Set`, `Map`, `Collection`, `Array`, `Pair`, `Triple` —
+eleman tipleri de desteklendiği sürece kullanılabilir (`List<SearchHistory>` gibi); bunlar da JSON
+metnine düşer. `Result<T>` gibi tanınmayan sarmalayıcılar derlemede reddedilir.
+
+Bildirilen tip üretilen imzaya **birebir** taşınır: tip argümanları, nullability ve gereken
+import'lar dahil. `@Write` parametresi nullable ise `null` yazmak anahtarı **siler** — "null'ı yok
+say" davranışı çağıranı sessizce yanıltırdı, çünkü `readX()` eski değeri döndürmeye devam ederdi.
 
 ### `@Read`'in iki şekli
 

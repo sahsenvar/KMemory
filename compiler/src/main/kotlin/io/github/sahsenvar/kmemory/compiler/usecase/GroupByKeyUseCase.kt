@@ -8,8 +8,11 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
  * Fonksiyonlari anahtara gore gruplar ve her grup icin tipi cikarir.
  *
  * `@EraseAll` anahtarsiz oldugu icin hicbir gruba girmez. Tipi cikarilamayan grup
- * [PreferenceType.OBJECT] + `null` FQN ile doner; bunu hataya cevirmek
+ * [PreferenceType.OBJECT] + `null` tip ile doner; bunu hataya cevirmek
  * [ValidateInterfaceUseCase]'in isidir.
+ *
+ * Gruba verilen indeks uretilen sabit adlarinin carpismasini onler (bkz.
+ * [PreferenceModel.keyProperty]); bu yuzden `groupBy`'in koruduğu BILDIRIM sirasina dayanir.
  */
 internal class GroupByKeyUseCase {
 
@@ -17,16 +20,22 @@ internal class GroupByKeyUseCase {
         functions
             .filter { it.key != null }
             .groupBy { checkNotNull(it.key) }
-            .map { (key, group) ->
+            .entries
+            .mapIndexed { index, entry ->
                 // Ayni anahtarda celisen tip bildirimi dogrulamada yakalanir; burada ilk
                 // tipli fonksiyon belirleyicidir.
-                val typed = group.firstOrNull { it.declaredTypeName != null }
-                val primitive = typed?.declaredTypeName?.let { PreferenceType.fromSimpleName(it) }
+                val declaredType = entry.value.firstNotNullOfOrNull { it.declaredType }
+                // Tip argumani tasiyan hicbir tip DataStore ilkeli olamaz; JSON'a duser.
+                val primitive = declaredType
+                    ?.takeUnless { it.hasArguments }
+                    ?.let { PreferenceType.fromQualifiedName(it.rootFqName) }
+
                 PreferenceModel(
-                    key = key,
+                    index = index,
+                    key = entry.key,
                     type = primitive ?: PreferenceType.OBJECT,
-                    objectTypeFqName = if (primitive == null) typed?.declaredTypeFqName else null,
-                    functions = group,
+                    declaredType = declaredType,
+                    functions = entry.value,
                 )
             }
 }
