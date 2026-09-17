@@ -1,11 +1,50 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Bu dosya projedeki kayda değer tüm değişiklikleri içerir.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) temellidir ve proje
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
 ---
+
+## [0.1.0]
+
+KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-annotations`,
+`io.github.sahsenvar:kmemory-compiler`) altında sürüm sayacı 0.1.0'dan başlar; aşağıdaki 2.0.0 ve
+öncesi upstream'in (`io.github.semenciuccosmin:preferences-*`) geçmişidir.
+
+**Breaking: tüm anotasyon yüzeyi değişti.**
+
+- Tek katmanlı anotasyon ailesi: `@Read` / `@Write` / `@Erase` / `@EraseAll`
+- `@Read` iki şekli destekler: `Flow<T?>` ve `suspend fun (): T?`
+- Tip imzadan çıkarılır; `@StringPreference` ailesi kaldırıldı
+- `defaultValue` kaldırıldı; okumalar daima nullable
+- `Result<T>` ve `Flow<Unit>` sarmalamaları desteklenmiyor
+- Üretilen sınıf `Context` yerine `DataStore<Preferences>` alır
+- `PreferencesFactory` / `@ConstructedBy` / reflection kaldırıldı
+- `PreferenceListener`: yazma/silme/hata kancaları; hatalar raporlanır ve yeniden fırlatılır
+- Şifreleme (`@Encrypted`) 0.2.0'a ertelendi
+
+Ek notlar:
+
+- `suspend` kuralı accessor'a değil dönüş şekline bağlıdır: `Flow` dönen suspend olamaz, dönmeyen
+  suspend olmalı
+- Dışa açılan tek yüzey üretilen `fun KMemory.<arayüzAdı>()` uzantısıdır; `*Impl` sınıfı `internal`
+- `ReturnAdapter` + `kmemory.adapters` KSP seçeneği genişletme seam'i olarak eklendi; 0.1.0'da
+  yalnızca doğrulamayı gevşetir, kod üretimi henüz adaptörden geçmez
+- `annotations` KMP (android, jvm, iosArm64, iosSimulatorArm64); `KMemory` çalışma zamanı sınıfı
+  JVM + Android kaynak kümesinde
+- Sürüm tabanı Zad ile hizalandı: Kotlin 2.3.21, KSP 2.3.9, datastore 1.2.0,
+  kotlinx-serialization 1.9.0
+- Doğrulama hataları `compiler` modülündeki `ValidationTest` ile, üretilen kodun davranışı `sample`
+  modülündeki `SamplePreferencesTest` ile kapsanır
+- Upstream artıkları kaldırıldı: `composeApp`, `iosApp`, `sampleAndroid`, `PreferencesFactory`,
+  `PreferencesConstructor`, `DataStoreProvider`
+- Apache-2.0 korunur; upstream atfı `NOTICE` dosyasındadır
+
+---
+
+## Upstream geçmişi (KspPreferences)
 
 ## [2.0.0] — 2026-05-06
 

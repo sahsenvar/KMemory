@@ -1,386 +1,318 @@
-<h1 align="center">KSP Preferences</h1>
+<h1 align="center">KMemory</h1>
 
 <p align="center">
-  <strong>Type-safe DataStore — generated from a Kotlin interface, zero boilerplate.</strong>
+  <strong>Bir Kotlin arayüzünden üretilen, tip güvenli DataStore erişimi.</strong>
 </p>
 
 <p align="center">
-  <a href="https://central.sonatype.com/artifact/io.github.semenciuccosmin/preferences-annotations"><img alt="Maven Central" src="https://img.shields.io/maven-central/v/io.github.semenciuccosmin/preferences-annotations?label=Maven%20Central&color=4CAF50"/></a>
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"/></a>
-  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white"/>
-  <img alt="KSP" src="https://img.shields.io/badge/KSP-2.x-orange"/>
-  <img alt="Platform" src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Desktop-3DDC84"/>
-  <img alt="API" src="https://img.shields.io/badge/minSdk-26-3DDC84"/>
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.3.21-7F52FF?logo=kotlin&logoColor=white"/>
+  <img alt="KSP" src="https://img.shields.io/badge/KSP-2.3.9-orange"/>
+  <img alt="Status" src="https://img.shields.io/badge/0.1.0-mavenLocal-lightgrey"/>
 </p>
 
 ---
 
-## ✨ Overview
+## Amaç
 
-**KSP Preferences** eliminates the DataStore boilerplate in your Kotlin project.  
-Annotate a plain Kotlin interface, and the KSP compiler plugin generates a fully-featured, type-safe DataStore implementation at build time — no runtime overhead.
-
-Supports **Kotlin Multiplatform (KMP)** projects targeting Android, iOS, and Desktop, as well as **traditional single-platform Android** projects.
-
-```
-Your Interface  ──▶  @Preferences + type annotations  ──▶  KSP generates Impl
-```
-
----
-
-## 🎯 Platform Support
-
-| Platform | Supported | Instantiation method |
-|---|---|---|
-| Android (KMP) | ✅ | `PreferencesFactory.create(constructor, context)` |
-| iOS (KMP) | ✅ | `PreferencesFactory.create(constructor)` |
-| Desktop/JVM (KMP) | ✅ | `PreferencesFactory.create(constructor)` |
-| Android (non-KMP) | ✅ | `PreferencesFactory.create<T>(context)` |
-
----
-
-## 📦 Installation
-
-### Non-KMP Android Project
-
-Add to your module's `build.gradle.kts`:
+`androidx.datastore-preferences` üzerine yazılan kod her seferinde aynıdır: `Preferences.Key`
+tanımla, `dataStore.data.map { }` yaz, `dataStore.edit { }` yaz, hatayı nereye raporlayacağına
+karar ver, anahtarı bir yerde sabit tut. KMemory bu katmanı bir **arayüzden** üretir.
 
 ```kotlin
+@Preferences(name = "auth.preferences_pb")
+interface AuthMemorySource {
+
+    @Read(KEY_TOKEN)  fun readToken(): Flow<String?>
+    @Read(KEY_TOKEN)  suspend fun readTokenOnce(): String?
+    @Write(KEY_TOKEN) suspend fun writeToken(value: String)
+    @Erase(KEY_TOKEN) suspend fun eraseToken()
+
+    @EraseAll suspend fun eraseAll()
+
+    companion object {
+        private const val KEY_TOKEN = "1e01afdb-736a-4854-9370-99c9f1f051af"
+    }
+}
+```
+
+İşlemci bunun karşılığında `AuthMemorySourceImpl` sınıfını ve `fun KMemory.authMemorySource()`
+fabrika uzantısını üretir. Üretilen kodun hiçbir yerinde `android.content.Context` geçmez —
+bağımlılık `DataStore<Preferences>`'tir; dolayısıyla üretilen kaynak Robolectric'siz, düz bir JVM
+testinde gerçek bir geçici dosya üzerinde koşar.
+
+Bu depo [SemenciucCosmin/KspPreferences](https://github.com/SemenciucCosmin/KspPreferences) 2.0.0'ın
+fork'udur; anotasyon yüzeyinin tamamı yeniden tasarlanmıştır (bkz. [CHANGELOG](CHANGELOG.md)).
+
+---
+
+## Kurulum
+
+0.1.0 henüz Maven Central'da **değildir**; `publishToMavenLocal` ile yerel depoya yayınlanır.
+
+```kotlin
+// settings.gradle.kts — tüketici tarafı
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        google()        // androidx.datastore YALNIZCA google() deposundadır
+        mavenCentral()
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts — tüketici modül
 plugins {
-    id("com.google.devtools.ksp") version "2.3.6"   // match your Kotlin version
+    kotlin("plugin.serialization")            // yalnızca @Serializable tip saklayacaksan
+    id("com.google.devtools.ksp")
 }
 
 dependencies {
-    // Annotations + factory
-    implementation("io.github.semenciuccosmin:preferences-annotations:2.0.0")
-
-    // KSP processor (code generator)
-    ksp("io.github.semenciuccosmin:preferences-compiler:2.0.0")
-
-    // Jetpack DataStore (required at runtime)
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("io.github.sahsenvar:kmemory-annotations:0.1.0")
+    ksp("io.github.sahsenvar:kmemory-compiler:0.1.0")
 }
 ```
 
-### KMP Project
+`kmemory-annotations`; `datastore-preferences`, `kotlinx-coroutines-core` ve
+`kotlinx-serialization-json` bağımlılıklarını `api` olarak taşır — üretilen kodun imzalarında
+göründükleri için ayrıca eklemen gerekmez.
 
-Add to your shared module's `build.gradle.kts`:
+**Sürüm tabanı:** Kotlin `2.3.21`, KSP `2.3.9`, datastore `1.2.0`, kotlinx-serialization `1.9.0`.
+Bunlar tek tüketicinin (Zad) sürümleridir; kütüphane bilerek daha yeni bir datastore/serialization
+ile yayınlanmaz, aksi halde Gradle'ın conflict-resolution'ı tüketiciyi sessizce yukarı çekerdi.
+
+---
+
+## Anotasyonlar
+
+| Anotasyon | Hedef | İmza | Üretilen |
+|---|---|---|---|
+| `@Preferences(name)` | arayüz | — | `name` doğrudan DataStore **dosya adıdır**, `STORE_NAME` sabitine literal gömülür |
+| `@Read(key)` | fonksiyon | `fun x(): Flow<T?>` | `dataStore.data.map { … }` |
+| `@Read(key)` | fonksiyon | `suspend fun x(): T?` | `dataStore.data.first().let { … }` |
+| `@Write(key)` | fonksiyon | `suspend fun x(value: T)` | `dataStore.edit { prefs[KEY] = value }` |
+| `@Erase(key)` | fonksiyon | `suspend fun x()` | `dataStore.edit { prefs.remove(KEY) }` |
+| `@EraseAll` | fonksiyon | `suspend fun x()` | `dataStore.edit { prefs.clear() }` — arayüz başına en fazla bir tane |
+
+Tip **imzadan çıkarılır**; upstream'in `@StringPreference` / `@IntPreference` / … ailesi yoktur.
+`@Erase` imzasında tip taşımaz: işlemci fonksiyonları anahtara göre gruplar ve tipi aynı gruptaki
+`@Read`/`@Write`'tan alır.
+
+Desteklenen `T`: `String`, `Int`, `Long`, `Float`, `Double`, `Boolean` ve `@Serializable` işaretli
+herhangi bir tip (JSON metni olarak `String` alanında saklanır). `List<T>` doğrudan desteklenmez —
+sarmalayıcı bir `@Serializable data class` kullan.
+
+### `@Read`'in iki şekli
+
+`Flow<T?>` canlı okumadır: anahtar her değiştiğinde yeniden yayınlar.
+`suspend fun (): T?` tek seferlik okumadır: akışın ilk değerini alır.
+
+İkisi aynı anahtar için aynı arayüzde birlikte bildirilebilir; değeri okuyan ifade ikisinde de
+birebir aynı üretilir.
+
+### suspend kuralı dönüş şekline bağlıdır, accessor'a değil
+
+> **`Flow` dönen fonksiyon `suspend` OLAMAZ. `Flow` dönmeyen fonksiyon `suspend` OLMALI.**
+
+Flow soğuktur, iş `collect` anında yapılır — `suspend fun (): Flow<T>` anlamsızdır. Kural dört
+anotasyon için de aynıdır; "`@Write` daima suspend'dir" gibi accessor bazlı bir istisna yoktur.
+
+---
+
+## Varsayılan değer kavramı yoktur
+
+Hiçbir anotasyonda `defaultValue` bulunmaz ve **her okuma nullable'dır**. Anahtar hiç yazılmamışsa
+`null` gelir.
+
+Varsayılan bir **iş kuralıdır** ve repository katmanına aittir. Kütüphaneye konduğunda iki ayrı
+durum tek bir değere çöker: "kullanıcı bu tercihi hiç değiştirmedi" ile "kullanıcı bilerek
+varsayılanla aynı değeri seçti" ayırt edilemez hale gelir. Migration'da da yanıltır: eski sürümün
+varsayılanı ile yeni sürümün varsayılanı farklıysa, diskte hiçbir şey değişmeden davranış değişir
+ve bunun izi hiçbir yere düşmez.
 
 ```kotlin
-plugins {
-    id("com.google.devtools.ksp") version "2.3.6"
-}
+// Repository — varsayılanın ait olduğu yer
+suspend fun theme(): Theme = memorySource.readTheme()?.let(Theme::valueOf) ?: Theme.System
+```
 
-kotlin {
-    // Add this to support expect/actual objects
-    compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
-    }
+---
 
-    sourceSets {
-        commonMain.dependencies {
-            implementation("io.github.semenciuccosmin:preferences-annotations:2.0.0")
-            implementation("androidx.datastore:datastore-preferences:1.2.1")
+## `Result<T>` ve `Flow<Unit>` neden desteklenmiyor
+
+Yerleşik dönüş şekilleri yalnızca şunlardır: `@Read` → `Flow<T?>` veya `T?`;
+`@Write`/`@Erase`/`@EraseAll` → `Unit`. Başka bir dönüş tipi **derleme hatasıdır**.
+
+- **`Result<T>` yerleşik değil**, çünkü hata yutmanın varsayılan yolu olurdu. KMemory'nin hata
+  sözleşmesi tektir: önce `PreferenceListener.onError` ile raporla, sonra **aynı hatayı yeniden
+  fırlat**. `Result` döndürmek çağıranın hatayı görmezden gelmesini sessiz ve kolay kılar; "anahtar
+  yok" ile "disk okunamadı" tek bir görünümde birleşirdi.
+- **Yazma için `Flow<Unit>` yerleşik değil**, çünkü yazma tek seferlik bir yan etkidir. Soğuk bir
+  `Flow` döndürmek, çağıran `collect` etmezse **hiçbir şeyin olmaması** demektir. Bu tuzak
+  varsayılan olarak dağıtılmaz.
+
+İstersen kapı açık: `ReturnAdapter` implemente edip `kmemory { adapters += … }` ile kaydedersin ve
+işlemciye `kmemory.adapters=kotlin.Result` KSP seçeneğiyle tanıtırsın.
+
+> **0.1.0 sınırı:** `kmemory.adapters` şu an yalnızca **doğrulamayı gevşetir**; kod üretimi hâlâ
+> kanonik şekli (`Flow<T?>` / `T?` / `Unit`) üretir, adaptör kaydına göre sarmalamaz. Yani seam
+> arayüz düzeyinde vardır ama uçtan uca çalışmaz: tanıtılan bir tip doğrulamayı geçer, üretilen
+> `override` ise bildirilen tiple uyuşmadığı için tüketici modülde derlenmez. Ucu uca adaptör
+> desteği 0.2.0'a bırakıldı.
+
+---
+
+## `KMemory` örneği ve DI'da bağlama
+
+Kütüphane `Context` görmez; bağımlılık bir `storeFactory` lambda'sıdır.
+
+```kotlin
+val memory = kmemory {
+    storeFactory = { name ->
+        PreferenceDataStoreFactory.createWithPath {
+            context.filesDir.resolve(name).absolutePath.toPath()
         }
     }
+    json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+    listener = crashlyticsPreferenceListener
 }
 
-// KSP processor for each target
-dependencies {
-    add("kspAndroid", "io.github.semenciuccosmin:preferences-compiler:2.0.0")
-    add("kspJvm", "io.github.semenciuccosmin:preferences-compiler:2.0.0")
-    add("kspIosArm64", "io.github.semenciuccosmin:preferences-compiler:2.0.0")
-    add("kspIosSimulatorArm64", "io.github.semenciuccosmin:preferences-compiler:2.0.0")
+val auth: AuthMemorySource = memory.authMemorySource()   // üretilen uzantı
+```
+
+`KMemory.store(name)` dosya adı başına **tek** `DataStore` örneği tutar. Bu bir konfor değil
+zorunluluktur: DataStore aynı dosya için ikinci bir örnek kurulduğunda çalışma anında patlar.
+Üretilen sınıf bu yüzden `internal`'dır — dışa açılan tek yüzey `fun KMemory.<arayüzAdı>()`
+uzantısıdır ve store tekilliğini `KMemory` üzerinden geçmeye zorlar.
+
+Koin ile:
+
+```kotlin
+@Single
+fun preferenceListener(reporter: CrashlyticsReporter): PreferenceListener =
+    object : PreferenceListener {
+        override fun onError(store: String, key: String?, error: Throwable) {
+            reporter.record(error, mapOf("store" to store, "key" to (key ?: "*")))
+        }
+    }
+
+@Single
+fun provideKMemory(context: Context, listener: PreferenceListener): KMemory = kmemory { … }
+
+@Single fun authMemorySource(kmemory: KMemory): AuthMemorySource = kmemory.authMemorySource()
+@Single fun userMemorySource(kmemory: KMemory): UserMemorySource = kmemory.userMemorySource()
+```
+
+Debug flavor'da aynı bean'i, tercih trafiğini debug drawer'a basan bir implementasyonla değiştirmek
+yeterlidir.
+
+### `PreferenceListener`
+
+```kotlin
+interface PreferenceListener {
+    fun onWrite(store: String, key: String) {}
+    fun onErase(store: String, key: String?) {}   // key == null → eraseAll
+    fun onError(store: String, key: String?, error: Throwable) {}
+
+    object None : PreferenceListener
 }
 ```
 
-> **Note** Both artifacts are published on **Maven Central** — no extra repository configuration needed.
+**Dinleyici değerleri asla görmez** — yalnızca store adı ve anahtar. Aksi halde bir hata ayıklama
+günlükçüsü PIN'i veya oturum token'ını logcat'e düşürürdü.
+
+Hatalar yutulmaz: okuma akışında `.catch { onError(…); throw it }`, yazma/silmede
+`try/catch` → raporla → yeniden fırlat. Üretilen sınıfta parametrenin varsayılanı
+`PreferenceListener.None`'dır, yani vermek zorunda değilsin.
 
 ---
 
-## 🚀 Quick Start
+## `commit()` / `apply()` ayrımı yoktur
 
-### 1 — Define your preferences interface
+DataStore'da SharedPreferences'ın `commit()` / `apply()` ikilemi **yoktur**. `dataStore.edit { }`
+daima atomiktir, askıya alır ve yazma kalıcı olana kadar dönmez. "apply" karşılığı yoktur — ve bu
+bir eksiklik değildir: SharedPreferences'taki sessiz veri kaybı hatalarının çoğunun kaynağı tam
+olarak `apply()`'dır. Böyle bir seçenek eklemek o tuzağı geri getirmek olurdu.
+
+Çağıranın yazmayı beklemek istememesi ayrı bir konudur ve **çağıranın kararıdır**
+(`scope.launch { … }`), kütüphanenin seçeneği değil.
+
+Gerçek bir strateji kararı varsa o da **bozulma (corruption) politikasıdır**:
+`ReplaceFileCorruptionHandler`. Bu, `DataStore`'un kurulduğu yere — yani `storeFactory`'ye, yani DI
+modülüne — aittir; anotasyona değil. Kütüphane bu kararı ne verir ne de görür.
+
+---
+
+## Derleme zamanı doğrulamaları
+
+Aşağıdakilerin her biri KSP hatası üretir (`compiler` modülündeki `ValidationTest` hepsini mesaj
+metniyle birlikte doğrular):
+
+- her fonksiyon `@Read`/`@Write`/`@Erase`/`@EraseAll`'dan birini taşımalı
+- arayüzde birden fazla `@EraseAll` bildirilemez
+- `@Write` tam 1 parametre almalı; `@Read`/`@Erase`/`@EraseAll` parametre almamalı
+- yerleşik olmayan (ve `kmemory.adapters` ile tanıtılmamış) dönüş şekli — `Result<Int>`,
+  `@Write`'ta `Flow<Unit>` vb.
+- aynı anahtar için farklı tipler bildirilmiş
+- yalnızca `@Erase` ile geçen anahtar: tip çıkarılamıyor, o anahtar için bir `@Read` veya `@Write`
+  gerekli
+- `Flow` dönen fonksiyon suspend olamaz (Flow soğuktur)
+- `Flow` dönmeyen fonksiyon suspend olmalı
+- `@Read` değeri nullable olmalı
+
+---
+
+## KSP seçenekleri
+
+| Seçenek | Değer | Varsayılan | Anlam |
+|---|---|---|---|
+| `kmemory.adapters` | virgülle ayrılmış FQN listesi | boş | `ReturnAdapter`'ların karşıladığı dönüş tipleri. 0.1.0'da yalnızca doğrulamayı gevşetir (yukarıdaki sınıra bak). |
 
 ```kotlin
-import io.github.semenciuccosmin.preferences.annotations.*
-import kotlinx.coroutines.flow.Flow
-
-@Preferences(name = "user_preferences")
-interface UserPreferences {
-
-    // One-shot suspending read
-    @Get
-    @StringPreference(key = "username", defaultValue = "")
-    suspend fun getUsername(): String
-
-    // Reactive Flow read
-    @GetFlow
-    @StringPreference(key = "username", defaultValue = "")
-    fun getUsernameFlow(): Flow<String>
-
-    // Suspending write
-    @Set
-    @StringPreference(key = "username", defaultValue = "")
-    suspend fun setUsername(value: String)
-
-    // Clear everything
-    @Clear
-    suspend fun clear()
+ksp {
+    arg("kmemory.adapters", "kotlin.Result")
 }
-```
-
-### 2 — Read & write
-
-```kotlin
-// suspend context
-val name = prefs.getUsername()
-prefs.setUsername("Cosmin")
-prefs.clear()
-
-// Compose / ViewModel
-val name by prefs.getUsernameFlow().collectAsState(initial = "")
 ```
 
 ---
 
-## 🏭 PreferencesFactory
+## Modüller ve platformlar
 
-`PreferencesFactory` provides two ways to instantiate the generated implementation, depending on your project setup.
-
-### Non-KMP Android / JVM — Reflection-based
-
-No extra annotations or declarations needed. The factory resolves the generated `*Impl` class via reflection at runtime:
-
-```kotlin
-import io.github.semenciuccosmin.preferences.factory.PreferencesFactory
-import io.github.semenciuccosmin.preferences.factory.create
-
-val prefs: UserPreferences = PreferencesFactory.create<UserPreferences>(context)
-```
-
-> **Note** This overload is available on Android and JVM only. On iOS, reflection is not supported — use the KMP approach below.
-
-### KMP — Constructor-based (Room 3 pattern)
-
-For KMP projects, use the `@ConstructedBy` annotation and an `expect object` declaration. This avoids reflection entirely and works on all platforms including iOS.
-
-**Step 1 — Annotate your interface and declare the constructor:**
-
-```kotlin
-// commonMain
-import io.github.semenciuccosmin.preferences.annotations.*
-import io.github.semenciuccosmin.preferences.factory.PreferencesConstructor
-
-@Preferences(name = "user_preferences")
-@ConstructedBy(UserPreferencesConstructor::class)
-interface UserPreferences {
-    // ... your functions
-}
-
-// One-liner — KSP generates the actual implementation on each platform
-expect object UserPreferencesConstructor : PreferencesConstructor<UserPreferences>
-```
-
-**Step 2 — Instantiate:**
-
-```kotlin
-// commonMain — works on Android, iOS, and Desktop
-import io.github.semenciuccosmin.preferences.factory.PreferencesFactory
-import io.github.semenciuccosmin.preferences.factory.create
-
-val prefs: UserPreferences = PreferencesFactory.create(UserPreferencesConstructor, context)
-
-// or directly:
-val prefs: UserPreferences = UserPreferencesConstructor.initialize(context)
-```
-
-> **Note** The `context` parameter is required on Android (pass the `Context`). On iOS and Desktop, pass `null` or omit it.
-
----
-
-## 🗂 Annotation Reference
-
-### Class-level
-
-| Annotation | Description |
-|---|---|
-| `@Preferences(name)` | Marks an interface as a DataStore container. `name` becomes the DataStore file name. |
-| `@ConstructedBy(constructor)` | *(KMP only)* Links the interface to its `PreferencesConstructor` object for type-safe instantiation. |
-
-### Function-level — operations
-
-| Annotation | Function type | Description |
+| Modül | Artifact | Platform |
 |---|---|---|
-| `@Get` | `suspend fun foo(): T` | One-shot read; returns the stored value or the default. |
-| `@GetFlow` | `fun foo(): Flow<T>` | Reactive read; emits on every change. |
-| `@Set` | `suspend fun foo(value: T)` | Persists the supplied value. |
-| `@Clear` | `suspend fun foo()` | Removes **all** keys from the DataStore. |
+| `annotations` | `io.github.sahsenvar:kmemory-annotations` | KMP: android, jvm, iosArm64, iosSimulatorArm64 |
+| `compiler` | `io.github.sahsenvar:kmemory-compiler` | JVM (KSP işlemcisi) |
+| `sample` | yayınlanmaz | JVM — üretilen kodun davranış testleri |
 
-### Function-level — value types
-
-| Annotation | Kotlin type | Default value |
-|---|---|---|
-| `@StringPreference(key, defaultValue)` | `String` | `""` |
-| `@IntPreference(key, defaultValue)` | `Int` | `0` |
-| `@BooleanPreference(key, defaultValue)` | `Boolean` | `false` |
-| `@LongPreference(key, defaultValue)` | `Long` | `0L` |
-| `@FloatPreference(key, defaultValue)` | `Float` | `0f` |
-| `@DoublePreference(key, defaultValue)` | `Double` | `0.0` |
-| `@ObjectPreference(key, clazz)` | `T?` | `null` |
-
-> **Note** The class passed to `@ObjectPreference(clazz = ...)` must be annotated with `@Serializable` (kotlinx.serialization), otherwise serialization will fail at runtime. Object preferences always return a nullable type — `null` is yielded when the key is absent.
+Anotasyonlar, `PreferenceListener` ve `ReturnAdapter` `commonMain`'dedir, yani iOS dahil tüm
+hedeflerde görünür. Çalışma zamanı sınıfı `KMemory` ise JVM + Android kaynak kümesindedir: store
+önbelleği paylaşılan değiştirilebilir durumdur ve eşzamanlılık koruması ister; 0.1.0'da
+`kotlinx-atomicfu` bağımlılığı eklemek yerine `synchronized` kullanıldı. iOS için çalışma zamanı
+gerektiğinde atomicfu kararı orada verilecek.
 
 ---
 
-## 📐 Full Interface Example
+## Bilinen sınırlar (0.1.0)
 
-```kotlin
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class UserProfile(val id: String, val name: String)
-
-@Preferences(name = "sample_preferences")
-interface SamplePreferences {
-
-    @Get    @BooleanPreference(key = "dark_mode",  defaultValue = false)
-    suspend fun getDarkMode(): Boolean
-
-    @GetFlow @BooleanPreference(key = "dark_mode", defaultValue = false)
-    fun getDarkModeFlow(): Flow<Boolean>
-
-    @Set    @BooleanPreference(key = "dark_mode",  defaultValue = false)
-    suspend fun setDarkMode(value: Boolean)
-
-    @Get    @IntPreference(key = "launch_count",  defaultValue = 0)
-    suspend fun getLaunchCount(): Int
-
-    @GetFlow @IntPreference(key = "launch_count", defaultValue = 0)
-    fun getLaunchCountFlow(): Flow<Int>
-
-    @Set    @IntPreference(key = "launch_count",  defaultValue = 0)
-    suspend fun setLaunchCount(value: Int)
-
-    @Get    @LongPreference(key = "last_sync_ms", defaultValue = 0L)
-    suspend fun getLastSyncMs(): Long
-
-    @Get    @FloatPreference(key = "font_scale",  defaultValue = 1f)
-    suspend fun getFontScale(): Float
-
-    @Get    @DoublePreference(key = "latitude",   defaultValue = 0.0)
-    suspend fun getLatitude(): Double
-
-    @Get    @StringPreference(key = "auth_token",  defaultValue = "")
-    suspend fun getAuthToken(): String
-
-    // clazz must be @Serializable — returns null when the key is absent
-    @Get    @ObjectPreference(key = "profile", clazz = UserProfile::class)
-    suspend fun getProfile(): UserProfile?
-
-    @GetFlow @ObjectPreference(key = "profile", clazz = UserProfile::class)
-    fun getProfileFlow(): Flow<UserProfile?>
-
-    @Set    @ObjectPreference(key = "profile", clazz = UserProfile::class)
-    suspend fun setProfile(value: UserProfile)
-
-    @Clear
-    suspend fun clear()
-}
-```
+- **Şifreleme yok.** `@Encrypted` / `PreferenceCipher` 0.1.0 kapsamı dışındadır.
+- **Adaptör seam'i uçtan uca değil** (yukarıda).
+- **Anahtar sabiti adı çakışabilir.** Üretilen companion sabiti, anahtarın alfanümerik
+  karakterlerinin ilk 20'sinden türetilir; aynı 20 karakterlik önekle başlayan iki anahtar aynı
+  sabit adını üretir ve tüketici modülde "conflicting declarations" hatası verir.
+- **Maven Central'a yayınlanmadı.** 0.1.0 yalnızca `publishToMavenLocal` ile tüketilir.
 
 ---
 
-## 📱 Sample Apps
+## Yerel yayın
 
-The repository includes two sample applications demonstrating both usage patterns:
-
-### `composeApp` — KMP (Android + iOS + Desktop)
-
-A Compose Multiplatform app that uses `@ConstructedBy` and `expect object` for type-safe, reflection-free instantiation across all platforms.
-
-```kotlin
-// commonMain
-@Preferences(name = PREFERENCES_NAME)
-@ConstructedBy(SamplePreferencesConstructor::class)
-interface SamplePreferences { /* ... */ }
-
-expect object SamplePreferencesConstructor : PreferencesConstructor<SamplePreferences>
-
-// Instantiation
-val prefs = PreferencesFactory.create(SamplePreferencesConstructor, context)
+```bash
+./gradlew publishToMavenLocal
 ```
 
-### `sampleAndroid` — Non-KMP Android
-
-A traditional single-platform Android app that uses the reflection-based factory. No `@ConstructedBy`, no `expect`/`actual` — just annotate and go.
-
-```kotlin
-@Preferences(name = PREFERENCES_NAME)
-interface SamplePreferences { /* ... */ }
-
-// Instantiation
-val prefs: SamplePreferences = PreferencesFactory.create(context)
-```
+Artifact'lar `~/.m2/repository/io/github/sahsenvar/` altına düşer.
 
 ---
 
-## 🏛 Maven Coordinates
+## Lisans
 
-| Artifact | Group | Version |
-|---|---|---------|
-| `preferences-annotations` | `io.github.semenciuccosmin` | `2.0.0` |
-| `preferences-compiler` | `io.github.semenciuccosmin` | `2.0.0` |
-
-**Gradle (Kotlin DSL)**
-```kotlin
-implementation("io.github.semenciuccosmin:preferences-annotations:2.0.0")
-ksp("io.github.semenciuccosmin:preferences-compiler:2.0.0")
-```
-
-**Gradle (Groovy DSL)**
-```groovy
-implementation 'io.github.semenciuccosmin:preferences-annotations:2.0.0'
-ksp 'io.github.semenciuccosmin:preferences-compiler:2.0.0'
-```
-
-**Maven**
-```xml
-<dependency>
-    <groupId>io.github.semenciuccosmin</groupId>
-    <artifactId>preferences-annotations</artifactId>
-    <version>2.0.0</version>
-</dependency>
-<!-- KSP processor — add via your KSP plugin config, not as a <dependency> -->
-```
-
----
-
-## 🔧 Requirements
-
-| Component | Version |
-|---|---|
-| Android minSdk | 26 |
-| Kotlin | 2.x |
-| KSP | matching Kotlin version |
-| Jetpack DataStore | 1.1+ |
-
----
-
-## 📜 License
-
-```
-Copyright 2026 Semenciuc Cosmin
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+Apache License 2.0 — bkz. [LICENSE](LICENSE); upstream atfı için [NOTICE](NOTICE).
