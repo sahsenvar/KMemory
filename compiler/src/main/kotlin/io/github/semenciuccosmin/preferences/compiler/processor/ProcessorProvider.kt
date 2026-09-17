@@ -24,6 +24,7 @@ internal class ProcessorProvider : SymbolProcessorProvider {
         KoinInitializer.initialize(
             environmentLogger = environment.logger,
             codeGenerator = environment.codeGenerator,
+            options = environment.options,
         )
 
         return getKoin().get<SymbolProcessor>()

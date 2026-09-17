@@ -3,7 +3,10 @@ package io.github.semenciuccosmin.preferences.compiler.di
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.SymbolProcessor
-import io.github.semenciuccosmin.preferences.compiler.logger.Logger
+import io.github.sahsenvar.kmemory.compiler.logger.Logger
+import io.github.sahsenvar.kmemory.compiler.usecase.CollectFunctionsUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.GroupByKeyUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.ValidateInterfaceUseCase
 import io.github.semenciuccosmin.preferences.compiler.processor.Processor
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateClearFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateCompanionObjectUseCase
@@ -16,13 +19,6 @@ import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateImportsUse
 import io.github.semenciuccosmin.preferences.compiler.usecase.GenerateSetFunctionUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GetPreferencesNameUseCase
 import io.github.semenciuccosmin.preferences.compiler.usecase.GetValueTypeAnnotationData
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateClearFunctionDeclarationUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateFunctionAnnotationsUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateFunctionDeclarationUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateGetFlowFunctionDeclarationUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateGetFunctionDeclarationUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateInterfaceUseCase
-import io.github.semenciuccosmin.preferences.compiler.usecase.ValidateSetFunctionDeclarationUseCase
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.factoryOf
 import org.koin.dsl.module
@@ -41,6 +37,9 @@ import org.koin.dsl.module
  */
 object KoinInitializer {
 
+    /** spec §9.1 — virgulle ayrilmis `ReturnAdapter` FQN listesi. */
+    private const val ADAPTERS_OPTION = "kmemory.adapters"
+
     /**
      * Starts a Koin container and registers all processor dependencies.
      *
@@ -53,11 +52,15 @@ object KoinInitializer {
      *                          validation errors and warnings back to the build system.
      * @param codeGenerator     The [CodeGenerator] provided by the KSP runtime, used to
      *                          create and write the generated `*Impl` source files.
+     * @param options           KSP secenekleri; yalnizca [ADAPTERS_OPTION] okunur (spec §9.1).
      */
     fun initialize(
         environmentLogger: KSPLogger,
         codeGenerator: CodeGenerator,
+        options: Map<String, String> = emptyMap(),
     ) {
+        val registeredAdapterTypes = parseAdapterTypes(options)
+
         startKoin {
             modules(
                 module {
@@ -71,13 +74,14 @@ object KoinInitializer {
 
                     factoryOf(::GetValueTypeAnnotationData)
 
-                    factoryOf(::ValidateGetFunctionDeclarationUseCase)
-                    factoryOf(::ValidateGetFlowFunctionDeclarationUseCase)
-                    factoryOf(::ValidateSetFunctionDeclarationUseCase)
-                    factoryOf(::ValidateClearFunctionDeclarationUseCase)
-                    factoryOf(::ValidateFunctionAnnotationsUseCase)
-                    factoryOf(::ValidateFunctionDeclarationUseCase)
-                    factoryOf(::ValidateInterfaceUseCase)
+                    factoryOf(::CollectFunctionsUseCase)
+                    factoryOf(::GroupByKeyUseCase)
+                    factory {
+                        ValidateInterfaceUseCase(
+                            logger = get(),
+                            registeredAdapterTypes = registeredAdapterTypes,
+                        )
+                    }
 
                     factoryOf(::GenerateGetFunctionUseCase)
                     factoryOf(::GenerateGetFlowFunctionUseCase)
@@ -107,4 +111,12 @@ object KoinInitializer {
             )
         }
     }
+
+    private fun parseAdapterTypes(options: Map<String, String>): Set<String> =
+        options[ADAPTERS_OPTION]
+            .orEmpty()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
 }
