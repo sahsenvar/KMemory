@@ -42,6 +42,13 @@ Ek notlar:
 - Gövdesi olan (soyut olmayan) arayüz fonksiyonları anotasyon zorunluluğundan ve üretimden muaf
 - Üretilemeyen soyut üye (miras dahil, fonksiyon ya da özellik) artık sessizce bozuk kod üretmek
   yerine net bir derleme hatası verir; üyesi olmayan marker supertype'lar etkilenmez
+- Üretilen `fun KMemory.<arayüzAdı>()` uzantısının görünürlüğü arayüzünkini izler: `internal`
+  arayüz `internal` uzantı üretir (önceden koşulsuz `public`'ti ve `EXPOSED_FUNCTION_RETURN_TYPE`
+  ile derlenmiyordu)
+- Serileştirme hataları `PreferenceListener.onError`'a ham hâlde değil, mesaj taşımayan yeni
+  `PreferenceSerializationException` (store + key + orijinalin sınıf adı, `cause` YOK) olarak
+  gider: kotlinx-serialization bozuk girdiyi hata mesajına gömdüğü için ham hata "dinleyici
+  değerleri asla görmez" sözleşmesini ihlal ediyordu. Çağırana fırlatılan hata değişmedi
 - `annotations` KMP (android, jvm, iosArm64, iosSimulatorArm64); `KMemory` çalışma zamanı sınıfı
   JVM + Android kaynak kümesinde
 - Sürüm tabanı Zad ile hizalandı: Kotlin 2.3.21, KSP 2.3.9, datastore 1.2.0,

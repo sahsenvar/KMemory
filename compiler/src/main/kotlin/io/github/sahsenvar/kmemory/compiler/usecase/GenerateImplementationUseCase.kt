@@ -1,8 +1,10 @@
 package io.github.sahsenvar.kmemory.compiler.usecase
 
+import com.google.devtools.ksp.getVisibility
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.Visibility
 import io.github.sahsenvar.kmemory.annotation.Preferences
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.model.Accessor
@@ -74,10 +76,19 @@ internal class GenerateImplementationUseCase(
                     appendLine()
                 }
             }
+            appendLine(reportFunction())
+            appendLine()
             appendLine(companionObject(storeName, models))
             appendLine("}")
             appendLine()
-            appendLine(factoryExtension(interfaceName, implementationName, needsJson))
+            appendLine(
+                factoryExtension(
+                    interfaceName = interfaceName,
+                    implementationName = implementationName,
+                    needsJson = needsJson,
+                    visibility = visibilityPrefixOf(declaration),
+                )
+            )
         }
 
         codeGenerator.createNewFile(
@@ -86,6 +97,24 @@ internal class GenerateImplementationUseCase(
             fileName = implementationName,
         ).bufferedWriter().use { it.write(content) }
     }
+
+    /**
+     * Tum hata yollarinin gectigi TEK raporlama noktasi.
+     *
+     * Dogrudan `listener.onError(STORE_NAME, key, error)` cagirmak tasarim §8'deki
+     * "dinleyici degerleri asla gormez" sozlesmesini ihlal ediyordu: kotlinx-serialization
+     * bozuk girdiyi hata mesajina gomer, yani bir Crashlytics dinleyicisi saklanan PIN'i ya
+     * da token'i disari tasirdi. [io.github.sahsenvar.kmemory.listener.PreferenceSerializationException.reportable]
+     * serilestirme hatalarini mesajsiz bir sarmalayiciya cevirir, digerlerini oldugu gibi
+     * birakir.
+     *
+     * Sarmalama yalnizca DINLEYICIYE gider; cagiran taraf orijinal hatayi almaya devam eder.
+     */
+    private fun reportFunction(): String = """
+        |    private fun report(key: String?, error: Throwable) {
+        |        listener.onError(STORE_NAME, key, PreferenceSerializationException.reportable(STORE_NAME, key, error))
+        |    }
+    """.trimMargin()
 
     /** `@Preferences`'in `name` argumani; uretilen `STORE_NAME` sabitine literal gomulur. */
     private fun storeNameOf(declaration: KSClassDeclaration): String? =
@@ -152,13 +181,18 @@ internal class GenerateImplementationUseCase(
     /**
      * `fun KMemory.<arayuzAdi>(): <Arayuz>` — tuketicinin gordugu tek yuzey (spec §6.1).
      *
-     * `public` anahtar sozcugu yazilmaz; uretilen dosya tuketici modulde derlendigi icin
-     * varsayilan gorunurluk zaten public'tir.
+     * Gorunurluk ARAYUZUN bildirdigi gorunurlugu izler. Kosulsuz public uretilseydi
+     * `internal interface AuthMemorySource` yazan bir tuketicide derleme
+     * EXPOSED_FUNCTION_RETURN_TYPE ("'public' function exposes its 'internal' return type")
+     * ile duserdi; yani kutuphane arayuzun modul-ici kalmasini imkansiz kilardi.
+     *
+     * `public` anahtar sozcugu ayrica yazilmaz; Kotlin'de varsayilan zaten odur.
      */
     private fun factoryExtension(
         interfaceName: String,
         implementationName: String,
         needsJson: Boolean,
+        visibility: String,
     ): String {
         val functionName = interfaceName.replaceFirstChar { it.lowercase() }
         val arguments = buildList {
@@ -167,9 +201,23 @@ internal class GenerateImplementationUseCase(
             add("listener")
         }.joinToString(", ")
 
-        return "fun KMemory.$functionName(): $interfaceName =\n" +
+        return "${visibility}fun KMemory.$functionName(): $interfaceName =\n" +
             "    $implementationName($arguments)"
     }
+
+    /**
+     * Uzanti fonksiyonunun onune yazilacak gorunurluk degistiricisi.
+     *
+     * Yalnizca `internal` ozel islem ister: uretilen dosya tuketici modulde derlendigi icin
+     * digerlerinin varsayilani (public) zaten dogrudur. `private`/`protected` bir arayuz
+     * uretilen dosyadan zaten gorulemez, dolayisiyla o durumda uretilen kod ne yazarsa yazsin
+     * derlenmez; buradaki karar onlari public varsayip Kotlin'in kendi hatasina birakmaktir.
+     */
+    private fun visibilityPrefixOf(declaration: KSClassDeclaration): String =
+        when (declaration.getVisibility()) {
+            Visibility.INTERNAL -> "internal "
+            else -> ""
+        }
 
     private companion object {
         const val IMPLEMENTATION_SUFFIX = "Impl"

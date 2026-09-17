@@ -44,6 +44,8 @@ internal class GenerateImportsUseCase {
             models.map { it.type.keyFactory }.distinct().sorted().forEach { add("$PREFERENCES_CORE.$it") }
             add(KMEMORY)
             add(PREFERENCE_LISTENER)
+            // Uretilen `report()` yardimcisi her sinifta var; sarmalayici kosulsuz gerekir.
+            add(PREFERENCE_SERIALIZATION_EXCEPTION)
             if (reads.any { it.readShape == ReadShape.FLOW }) {
                 add(FLOW)
                 add(FLOW_CATCH)
@@ -80,6 +82,8 @@ internal class GenerateImportsUseCase {
         const val EDIT = "$PREFERENCES_CORE.edit"
         const val KMEMORY = "io.github.sahsenvar.kmemory.KMemory"
         const val PREFERENCE_LISTENER = "io.github.sahsenvar.kmemory.listener.PreferenceListener"
+        const val PREFERENCE_SERIALIZATION_EXCEPTION =
+            "io.github.sahsenvar.kmemory.listener.PreferenceSerializationException"
         const val FLOW = "kotlinx.coroutines.flow.Flow"
         const val FLOW_CATCH = "kotlinx.coroutines.flow.catch"
         const val FLOW_FIRST = "kotlinx.coroutines.flow.first"

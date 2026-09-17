@@ -192,6 +192,10 @@ zorunluluktur: DataStore aynı dosya için ikinci bir örnek kurulduğunda çal�
 Üretilen sınıf bu yüzden `internal`'dır — dışa açılan tek yüzey `fun KMemory.<arayüzAdı>()`
 uzantısıdır ve store tekilliğini `KMemory` üzerinden geçmeye zorlar.
 
+Uzantının görünürlüğü **arayüzün kendi görünürlüğünü izler**: `internal interface
+AuthMemorySource` için `internal fun KMemory.authMemorySource()` üretilir. Arayüzü modül içinde
+tutmak isteyen tüketici bu yüzden `EXPOSED_FUNCTION_RETURN_TYPE` hatasına çarpmaz.
+
 Koin ile:
 
 ```kotlin
@@ -228,9 +232,39 @@ interface PreferenceListener {
 **Dinleyici değerleri asla görmez** — yalnızca store adı ve anahtar. Aksi halde bir hata ayıklama
 günlükçüsü PIN'i veya oturum token'ını logcat'e düşürürdü.
 
-Hatalar yutulmaz: okuma akışında `.catch { onError(…); throw it }`, yazma/silmede
+Hatalar yutulmaz: okuma akışında `.catch { report(…); throw it }`, yazma/silmede
 `try/catch` → raporla → yeniden fırlat. Üretilen sınıfta parametrenin varsayılanı
 `PreferenceListener.None`'dır, yani vermek zorunda değilsin.
+
+#### `PreferenceSerializationException`
+
+Değer gizliliği `onError`'a verilen **hatanın içinde** de korunur. kotlinx-serialization bozuk
+girdiyi hata mesajına gömer:
+
+```text
+Unexpected JSON token at offset 41: ... JSON input: {"pin":"1234","token":"ey..."}
+```
+
+Ham hata dinleyiciye verilseydi bu mesaj Crashlytics'e düşerdi. Üretilen kod bu yüzden
+serileştirme kaynaklı hataları dinleyiciye vermeden önce mesaj taşımayan bir sarmalayıcıya
+çevirir:
+
+```kotlin
+class PreferenceSerializationException : RuntimeException {
+    val store: String        // hangi DataStore dosyası
+    val key: String?         // hangi anahtar (null → store ölçeği)
+    val failureType: String  // orijinal hatanın sınıf adı, örn. "JsonDecodingException"
+}
+```
+
+- Orijinal hata **`cause` olarak tutulmaz**: `stackTraceToString()` ve çoğu günlükleme altyapısı
+  cause zincirini de basar, yani cause tutulsaydı değer aynı yoldan yine dışarı çıkardı. Kalan
+  tanı bilgisi `failureType`'tır.
+- **Çağırana fırlatılan hata değişmez**: sarmalayıcı yalnızca dinleyiciye gider, `readX()` /
+  `writeX()` çağıranı orijinal `SerializationException`'ı almaya devam eder. Çağıran zaten değere
+  erişebilen koddur; orada gizlilik kaybı yoktur ve tam tanı korunur.
+- Serileştirme dışındaki hatalar (disk G/Ç, bozuk dosya, iptal) **olduğu gibi** geçer; değer
+  taşımadıkları için mesajlarını silmek tanılamayı bedelsiz yere körleştirirdi.
 
 ---
 

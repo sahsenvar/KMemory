@@ -3,15 +3,22 @@ package io.github.sahsenvar.kmemory.sample
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
+import io.github.sahsenvar.kmemory.listener.PreferenceSerializationException
 import io.github.sahsenvar.kmemory.sample.model.SearchHistorySample
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okio.Path.Companion.toOkioPath
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -128,5 +135,57 @@ class SamplePreferencesTest {
         val history = listOf(SearchHistorySample("zad"), SearchHistorySample("kmemory"))
         p.writeHistory(history)
         assertEquals(history, p.readHistory().first())
+    }
+
+    /**
+     * Spec §8: "dinleyici degerleri ASLA gormez".
+     *
+     * kotlinx-serialization bozuk girdiyi hata MESAJINA gomer ("... JSON input: {...}"), yani
+     * ham `Throwable` dinleyiciye verildiginde bir Crashlytics kaydi saklanan degeri disari
+     * tasir. Test diske icinde taninabilir bir metin olan bozuk bir JSON yazar ve dinleyiciye
+     * ulasan hatanin TUM metninde (cause zinciri dahil) o metnin gecmedigini dogrular.
+     */
+    @Test
+    fun `bozuk JSON hatasi dinleyiciye saklanan degeri sizdirmaz`() = runTest {
+        val dataStore = store()
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(KEY_PROFILE)] = BOZUK_JSON
+        }
+        val reported = mutableListOf<Throwable>()
+        val listener = object : PreferenceListener {
+            override fun onError(store: String, key: String?, error: Throwable) {
+                reported += error
+            }
+        }
+        val p = SamplePreferencesImpl(dataStore, Json, listener)
+
+        // Cagirana firlatilan hata DEGISMEZ: hala serilestirme hatasinin kendisi.
+        assertFailsWith<SerializationException> { p.readProfile().first() }
+        assertFailsWith<SerializationException> { p.readProfileOnce() }
+
+        assertEquals(2, reported.size, "her iki okuma sekli de raporlamali")
+        reported.forEach { error ->
+            val metin = error.stackTraceToString()
+            assertFalse(
+                metin.contains(SIZINTI_KANITI),
+                "dinleyiciye giden hata saklanan degeri tasiyor: $metin",
+            )
+            // Sarmalayici tanisiz olmamali: hangi depo, hangi anahtar, hangi hata sinifi.
+            val sarmalayici = assertIs<PreferenceSerializationException>(error)
+            assertEquals(KEY_PROFILE, sarmalayici.key)
+            assertEquals("JsonDecodingException", sarmalayici.failureType)
+            assertNull(sarmalayici.cause, "cause tutulursa mesaj zincir uzerinden yine okunur")
+        }
+    }
+
+    private companion object {
+        /** Bozuk JSON'un icindeki taninabilir metin; hata mesajinda GORUNMEMELI. */
+        const val SIZINTI_KANITI = "SIZINTI-KANITI-PIN-4321"
+
+        /** Kapanmamis nesne: kotlinx-serialization bunu cozemez ve girdiyi mesaja gomer. */
+        const val BOZUK_JSON = "{\"id\":\"1\",\"name\":\"$SIZINTI_KANITI"
+
+        /** [SamplePreferences] companion'indaki ayni sabit; orada `private`. */
+        const val KEY_PROFILE = "3f1c0b2e-0002-4000-8000-000000000002"
     }
 }

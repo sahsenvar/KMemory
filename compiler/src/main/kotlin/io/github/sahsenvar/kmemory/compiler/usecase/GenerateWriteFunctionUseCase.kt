@@ -10,7 +10,9 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
  * Upstream'in `GenerateSetFunctionUseCase`'inin yerini alir. Iki fark var:
  * - Yazma basarili olunca [io.github.sahsenvar.kmemory.listener.PreferenceListener.onWrite]
  *   cagrilir; upstream'de hicbir kanca yoktu.
- * - Hata yutulmaz: once `onError` ile raporlanir, sonra AYNI hata yeniden firlatilir.
+ * - Hata yutulmaz: once uretilen `report(key, error)` yardimcisi ile raporlanir (serilestirme
+ *   hatalarinin mesaji saklanan degeri icerdigi icin dinleyiciye mesajsiz sarmalayici gider),
+ *   sonra AYNI hata yeniden firlatilir.
  *   Upstream `dataStore.edit`'i ciplak birakiyordu, yani disk hatasi cagrildigi yere
  *   ham sekilde sizip hangi anahtarda oldugu bilgisini kaybediyordu.
  *
@@ -41,7 +43,7 @@ internal class GenerateWriteFunctionUseCase {
             editBlock(model, nullable) + "\n" +
             "            listener.onWrite(STORE_NAME, ${model.keyNameProperty})\n" +
             "        } catch (error: Throwable) {\n" +
-            "            listener.onError(STORE_NAME, ${model.keyNameProperty}, error)\n" +
+            "            report(${model.keyNameProperty}, error)\n" +
             "            throw error\n" +
             "        }\n" +
             "    }"

@@ -36,7 +36,7 @@ internal class GenerateEraseFunctionUseCase {
         |            dataStore.edit { prefs -> prefs.remove(${model.keyProperty}) }
         |            listener.onErase(STORE_NAME, ${model.keyNameProperty})
         |        } catch (error: Throwable) {
-        |            listener.onError(STORE_NAME, ${model.keyNameProperty}, error)
+        |            report(${model.keyNameProperty}, error)
         |            throw error
         |        }
         |    }
@@ -56,7 +56,7 @@ internal class GenerateEraseFunctionUseCase {
         |            dataStore.edit { prefs -> prefs.clear() }
         |            listener.onErase(STORE_NAME, null)
         |        } catch (error: Throwable) {
-        |            listener.onError(STORE_NAME, null, error)
+        |            report(null, error)
         |            throw error
         |        }
         |    }

@@ -353,6 +353,24 @@ class ValidationTest {
         assertContains(result.messages, "kmemory.adapters henüz desteklenmiyor")
     }
 
+    // --- gorunurluk ----------------------------------------------------------------------
+
+    @Test
+    fun `internal arayuzden uretilen uzanti derlenir`() {
+        val result = compile(
+            body = """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int)
+            """,
+            modifiers = "internal ",
+        )
+
+        // Uzanti kosulsuz public uretilirse Kotlin EXPOSED_FUNCTION_RETURN_TYPE verir:
+        // public bir fonksiyon internal bir tipi disari acamaz.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
     // --- altyapi -------------------------------------------------------------------------
 
     private fun assertError(result: JvmCompilationResult, message: String) {
@@ -363,6 +381,7 @@ class ValidationTest {
     /**
      * [body] bir `@Preferences` arayuzunun govdesidir; gerisi sabit kalir.
      *
+     * @param modifiers arayuz bildiriminin onune yazilan degistiriciler, or. `"internal "`.
      * @param supertype arayuzun turedigi tip; `null` ise supertype yazilmaz.
      * @param extraDeclarations fixture dosyasina eklenen ust-duzey bildirimler (supertype'lar).
      * @param extraImports temel import listesine eklenenler.
@@ -370,6 +389,7 @@ class ValidationTest {
      */
     private fun compile(
         body: String,
+        modifiers: String = "",
         supertype: String? = null,
         extraDeclarations: String = "",
         extraImports: List<String> = emptyList(),
@@ -385,7 +405,7 @@ class ValidationTest {
                 appendLine()
             }
             appendLine("""@Preferences(name = "test.preferences_pb")""")
-            appendLine("interface TestPreferences" + supertype?.let { " : $it" }.orEmpty() + " {")
+            appendLine(modifiers + "interface TestPreferences" + supertype?.let { " : $it" }.orEmpty() + " {")
             appendLine(body.trimIndent().prependIndent("    "))
             appendLine("}")
         }

@@ -37,6 +37,10 @@ interface SamplePreferences {
     @Read(KEY_PROFILE)
     fun readProfile(): Flow<ProfileSample?>
 
+    /** Nesne okumanin suspend sekli; JSON cozme hatasi bu yolda da ayni sekilde raporlanmali. */
+    @Read(KEY_PROFILE)
+    suspend fun readProfileOnce(): ProfileSample?
+
     @Write(KEY_PROFILE)
     suspend fun writeProfile(value: ProfileSample)
 

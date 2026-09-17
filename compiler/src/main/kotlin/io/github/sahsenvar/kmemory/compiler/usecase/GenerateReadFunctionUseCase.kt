@@ -18,6 +18,10 @@ import io.github.sahsenvar.kmemory.compiler.model.ReadShape
  * Hata hicbir sekilde yutulmaz: once [io.github.sahsenvar.kmemory.listener.PreferenceListener]
  * bilgilendirilir, sonra AYNI hata yeniden firlatilir. Yutulsaydi cagiran taraf "anahtar yok"
  * ile "disk okunamadi" durumlarini ayirt edemezdi; ikisi de `null` gorunurdu.
+ *
+ * Bildirim `listener.onError` ile DOGRUDAN degil, uretilen `report(key, error)` yardimcisi
+ * uzerinden yapilir: JSON cozme hatasinin mesaji saklanan degeri icerir ve dinleyiciye
+ * mesajsiz sarmalayici gitmek zorundadir (tasarim §8).
  */
 internal class GenerateReadFunctionUseCase {
 
@@ -57,7 +61,7 @@ internal class GenerateReadFunctionUseCase {
         |        dataStore.data
         |            .map { prefs -> $read }
         |            .catch { error ->
-        |                listener.onError(STORE_NAME, ${model.keyNameProperty}, error)
+        |                report(${model.keyNameProperty}, error)
         |                throw error
         |            }
     """.trimMargin()
@@ -73,7 +77,7 @@ internal class GenerateReadFunctionUseCase {
         |        try {
         |            dataStore.data.first().let { prefs -> $read }
         |        } catch (error: Throwable) {
-        |            listener.onError(STORE_NAME, ${model.keyNameProperty}, error)
+        |            report(${model.keyNameProperty}, error)
         |            throw error
         |        }
     """.trimMargin()
