@@ -4,7 +4,6 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import io.github.sahsenvar.kmemory.compiler.di.KoinInitializer
-import org.koin.mp.KoinPlatform.getKoin
 
 /**
  * Koin kapsayicisini kurup tam bagli bir [Processor] ureten KSP giris noktasi.
@@ -15,12 +14,12 @@ import org.koin.mp.KoinPlatform.getKoin
 internal class ProcessorProvider : SymbolProcessorProvider {
 
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
-        KoinInitializer.initialize(
+        val koin = KoinInitializer.initialize(
             environmentLogger = environment.logger,
             codeGenerator = environment.codeGenerator,
             options = environment.options,
         )
 
-        return getKoin().get<SymbolProcessor>()
+        return koin.get<SymbolProcessor>()
     }
 }

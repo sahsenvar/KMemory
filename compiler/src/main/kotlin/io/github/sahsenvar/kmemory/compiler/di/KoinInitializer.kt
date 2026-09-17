@@ -13,8 +13,9 @@ import io.github.sahsenvar.kmemory.compiler.usecase.GenerateReadFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateWriteFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GroupByKeyUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.ValidateInterfaceUseCase
-import org.koin.core.context.startKoin
+import org.koin.core.Koin
 import org.koin.core.module.dsl.factoryOf
+import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 
 /**
@@ -23,6 +24,12 @@ import org.koin.dsl.module
  * KSP islemcisi Kotlin derleyici daemon'unda calisir; cerceve yonetimli bir DI yasam dongusu
  * yoktur, bu yuzden kapsayici elle kurulur. [KSPLogger] ve [CodeGenerator] Koin tarafindan
  * uretilemedigi icin cagri yerinden yakalanip closure ile verilir.
+ *
+ * Kapsayici GLOBAL DEGILDIR (`startKoin` kullanilmaz), her cagride yalitilmis bir
+ * [koinApplication] kurulur. Iki nedenle: (1) daemon yeniden kullanildiginda ikinci derleme
+ * `KoinApplicationAlreadyStartedException` ile patlardi; (2) global kapsayici paylasilsaydi
+ * ilk derlemenin [CodeGenerator]'i closure'da kalir ve uretilen dosyalar yanlis modulun
+ * ciktisina yazilabilirdi.
  *
  * Her bagimlilik **factory**'dir: her cozumde yeni ornek doner, boylece artimli KSP turlari
  * arasinda bayat durum tasinmaz.
@@ -39,15 +46,16 @@ object KoinInitializer {
      * @param environmentLogger KSP'nin sagladigi gunlukcu; dogrulama hatalari buraya gider.
      * @param codeGenerator KSP'nin sagladigi uretec; `*Impl` dosyalari bununla yazilir.
      * @param options KSP secenekleri; yalnizca [ADAPTERS_OPTION] okunur (spec §9.1).
+     * @return yalnizca bu derlemeye ait, yalitilmis kapsayici.
      */
     fun initialize(
         environmentLogger: KSPLogger,
         codeGenerator: CodeGenerator,
         options: Map<String, String> = emptyMap(),
-    ) {
+    ): Koin {
         val registeredAdapterTypes = parseAdapterTypes(options)
 
-        startKoin {
+        return koinApplication {
             modules(
                 module {
                     factory<Logger> { Logger(environmentLogger) }
@@ -85,7 +93,7 @@ object KoinInitializer {
                     }
                 }
             )
-        }
+        }.koin
     }
 
     private fun parseAdapterTypes(options: Map<String, String>): Set<String> =

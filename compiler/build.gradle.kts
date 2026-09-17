@@ -53,4 +53,14 @@ dependencies {
 
     // KMEMORY MODULES
     implementation(projects.annotations)
+
+    // TEST
+    testImplementation(kotlin("test"))
+    testImplementation(libs.kctfork.core)
+    testImplementation(libs.kctfork.ksp)
+
+    // Fixture'larin ve uretilen kodun derlenebilmesi icin: kctfork host classpath'ini
+    // (inheritClassPath) derleme classpath'i olarak kullanir.
+    testImplementation(libs.datastore.preferences.core)
+    testImplementation(libs.kotlinx.serialization.json)
 }
