@@ -82,14 +82,28 @@ class ValidationTest {
     }
 
     @Test
-    fun `Write Flow donerse hata verir`() {
+    fun `Write Flow Int donerse hata verir`() {
         val result = compile(
             """
-            @Write("k") fun writeK(value: Int): Flow<Unit>
+            @Write("k") fun writeK(value: Int): Flow<Int>
             """
         )
 
+        // `Flow<Unit>` yerlesiktir; `Flow<Int>` degildir — yazmanin yayacak bir degeri yok.
         assertError(result, "yerleşik bir dönüş şekli değil")
+    }
+
+    @Test
+    fun `Write Flow donerse ve suspend ise hata verir`() {
+        val result = compile(
+            """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") suspend fun writeK(value: Int): Flow<Unit>
+            """
+        )
+
+        // spec 4.0'in tek kurali yazma tarafinda da gecerli.
+        assertError(result, "Flow dönen fonksiyon suspend olamaz (Flow soğuktur)")
     }
 
     @Test
@@ -157,6 +171,39 @@ class ValidationTest {
         )
 
         assertError(result, "@Read değeri nullable olmalı")
+    }
+
+    @Test
+    fun `Flow donen yazma silme ve eraseAll gecerlidir`() {
+        val result = compile(
+            """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") fun writeK(value: Int): Flow<Unit>
+            @Erase("k") fun eraseK(): Flow<Unit>
+            @EraseAll fun eraseAll(): Flow<Unit>
+            """
+        )
+
+        // spec 4.0: @Write/@Erase/@EraseAll icin `Flow<Unit>` (non-suspend) YERLESIK sekildir.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    @Test
+    fun `ayni arayuzde Flow ve suspend yazma bir arada derlenir`() {
+        val result = compile(
+            """
+            @Read("k") fun readK(): Flow<Int?>
+            @Write("k") fun writeK(value: Int): Flow<Unit>
+            @Write("k") suspend fun writeKOnce(value: Int)
+            @Erase("k") fun eraseK(): Flow<Unit>
+            @Erase("k") suspend fun eraseKOnce()
+            """
+        )
+
+        // Iki sekil de yerlesik; tuketici sectigini kullanir, kutuphane birini dayatmaz.
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
     }
 
     // --- tip sadakati ve anahtar adi carpismasi ------------------------------------------

@@ -92,8 +92,10 @@ ile yayınlanmaz, aksi halde Gradle'ın conflict-resolution'ı tüketiciyi sessi
 | `@Read(key)` | fonksiyon | `fun x(): Flow<T?>` | `dataStore.data.map { … }` |
 | `@Read(key)` | fonksiyon | `suspend fun x(): T?` | `dataStore.data.first().let { … }` |
 | `@Write(key)` | fonksiyon | `suspend fun x(value: T)` | `dataStore.edit { prefs[KEY] = value }` |
+| `@Write(key)` | fonksiyon | `fun x(value: T): Flow<Unit>` | `flow { dataStore.edit { … }; emit(Unit) }` |
 | `@Erase(key)` | fonksiyon | `suspend fun x()` | `dataStore.edit { prefs.remove(KEY) }` |
-| `@EraseAll` | fonksiyon | `suspend fun x()` | `dataStore.edit { prefs.clear() }` — arayüz başına en fazla bir tane |
+| `@Erase(key)` | fonksiyon | `fun x(): Flow<Unit>` | `flow { dataStore.edit { prefs.remove(KEY) }; emit(Unit) }` |
+| `@EraseAll` | fonksiyon | `suspend fun x()` / `fun x(): Flow<Unit>` | `dataStore.edit { prefs.clear() }` — arayüz başına en fazla bir tane |
 
 Tip **imzadan çıkarılır**; upstream'in `@StringPreference` / `@IntPreference` / … ailesi yoktur.
 `@Erase` imzasında tip taşımaz: işlemci fonksiyonları anahtara göre gruplar ve tipi aynı gruptaki
@@ -116,6 +118,34 @@ say" davranışı çağıranı sessizce yanıltırdı, çünkü `readX()` eski d
 
 İkisi aynı anahtar için aynı arayüzde birlikte bildirilebilir; değeri okuyan ifade ikisinde de
 birebir aynı üretilir.
+
+### `@Write` / `@Erase` / `@EraseAll`'un iki şekli
+
+`suspend fun x(…)` işi **çağrı anında** yapar.
+`fun x(…): Flow<Unit>` işi **collect anında** yapar ve ardından tek bir `Unit` yayar.
+
+```kotlin
+override fun writeAuthToken(value: String): Flow<Unit> = flow {
+    dataStore.edit { prefs -> prefs[KEY_AUTH_TOKEN] = value }
+    listener.onWrite(STORE_NAME, KEY_NAME_AUTH_TOKEN)
+    emit(Unit)
+}.catch { error -> report(KEY_NAME_AUTH_TOKEN, error); throw error }
+```
+
+İkisi de yerleşiktir ve aynı arayüzde, hatta aynı anahtar için birlikte bildirilebilir; hangisinin
+kullanılacağı **tüketicinin** kararıdır. Zad tarafında seçim `Flow`'dur: böylece `MemorySource`
+üyeleri `RemoteSource` üyeleriyle aynı şekli taşır ve repository idiomu değişmez.
+
+```kotlin
+// Repository — RemoteSource ile birebir aynı idiom
+override fun writeAuthToken(value: String): Flow<Unit> =
+    flow { emitAll(memorySource.writeAuthToken(value)) }.flowOn(ioContext)
+```
+
+> **Soğukluk bilinçlidir:** `collect` edilmeyen bir yazma **hiç olmaz** — ne diske yazılır ne de
+> `PreferenceListener` tetiklenir. Hata da aynı şekilde yalnızca collect anında doğar. Bu davranış
+> `sample` modülündeki `FlowSamplePreferencesTest` ile sabitlenmiştir; "kolaylık olsun" diye sıcak
+> hale getirilmesi bir davranış kırılmasıdır.
 
 ### suspend kuralı dönüş şekline bağlıdır, accessor'a değil
 
@@ -144,18 +174,22 @@ suspend fun theme(): Theme = memorySource.readTheme()?.let(Theme::valueOf) ?: Th
 
 ---
 
-## `Result<T>` ve `Flow<Unit>` neden desteklenmiyor
+## `Result<T>` neden desteklenmiyor
 
 Yerleşik dönüş şekilleri yalnızca şunlardır: `@Read` → `Flow<T?>` veya `T?`;
-`@Write`/`@Erase`/`@EraseAll` → `Unit`. Başka bir dönüş tipi **derleme hatasıdır**.
+`@Write`/`@Erase`/`@EraseAll` → `Flow<Unit>` veya `Unit`. Başka bir dönüş tipi **derleme hatasıdır**
+(`Flow<Int>` dönen bir `@Write` dahil: yazmanın yayacak bir değeri yoktur).
 
 - **`Result<T>` yerleşik değil**, çünkü hata yutmanın varsayılan yolu olurdu. KMemory'nin hata
   sözleşmesi tektir: önce `PreferenceListener.onError` ile raporla, sonra **aynı hatayı yeniden
   fırlat**. `Result` döndürmek çağıranın hatayı görmezden gelmesini sessiz ve kolay kılar; "anahtar
   yok" ile "disk okunamadı" tek bir görünümde birleşirdi.
-- **Yazma için `Flow<Unit>` yerleşik değil**, çünkü yazma tek seferlik bir yan etkidir. Soğuk bir
-  `Flow` döndürmek, çağıran `collect` etmezse **hiçbir şeyin olmaması** demektir. Bu tuzak
-  varsayılan olarak dağıtılmaz.
+- **Yazma için `Flow<Unit>` yerleşiktir** (0.1.0'da bu karar değişti). Gerekçe soğukluğun bir
+  tuzak olmadığı değil, tuzağın **görünür** olduğudur: tüketici arayüzün tamamını tek şekilde —
+  ya hep `suspend` ya hep `Flow` — yazdığında `collect` etmeyi unutmak, tek bir çağrı yerini değil
+  bütün bir katmanı etkileyen ve derhal fark edilen bir hatadır. Buna karşılık iki şekli
+  karıştırmak, `MemorySource` ile `RemoteSource`'un imzalarını ayırıp her repository'de bir adaptör
+  katmanı doğuruyordu. `suspend` şekli kaldırılmadı; ikisi de yerleşiktir.
 
 İleriye dönük kapı açık: `ReturnAdapter` arayüzü ve `kmemory { adapters += … }` alanı **seam
 olarak duruyor** — ama 0.1.0'da işleyiciye bağlı değil.
@@ -297,7 +331,7 @@ metniyle birlikte doğrular):
   yapılması gerektiği yazar. **Üyesi olmayan marker supertype'lar sorun değildir.**
 - arayüzde birden fazla `@EraseAll` bildirilemez
 - `@Write` tam 1 parametre almalı; `@Read`/`@Erase`/`@EraseAll` parametre almamalı
-- yerleşik olmayan dönüş şekli — `Result<Int>`, `@Write`'ta `Flow<Unit>` vb.
+- yerleşik olmayan dönüş şekli — `Result<Int>`, `@Write`'ta `Flow<Int>` vb.
 - aynı anahtar için farklı tipler bildirilmiş
 - yalnızca `@Erase` ile geçen anahtar: tip çıkarılamıyor, o anahtar için bir `@Read` veya `@Write`
   gerekli

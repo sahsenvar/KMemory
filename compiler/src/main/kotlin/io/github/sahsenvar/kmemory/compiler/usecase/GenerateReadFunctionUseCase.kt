@@ -3,7 +3,7 @@ package io.github.sahsenvar.kmemory.compiler.usecase
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
-import io.github.sahsenvar.kmemory.compiler.model.ReadShape
+import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
 
 /**
  * `@Read` tasiyan bir fonksiyonun `override` govdesini uretir (spec §4.0, §6).
@@ -42,11 +42,9 @@ internal class GenerateReadFunctionUseCase {
         val decodeType = function.declaredType?.nonNull ?: model.type.simpleName
         val read = readExpression(model, decodeType)
 
-        return when (function.readShape) {
-            ReadShape.FLOW -> generateFlow(model, function, signatureType, read)
-            // readShape yalnizca READ disindaki erisimlerde null olur; bu kullanim yeri READ
-            // oldugu icin null pratikte olusmaz, olustugunda suspend sekli guvenli varsayimdir.
-            ReadShape.SUSPEND, null -> generateSuspend(model, function, signatureType, read)
+        return when (function.returnShape) {
+            ReturnShape.FLOW -> generateFlow(model, function, signatureType, read)
+            ReturnShape.SUSPEND -> generateSuspend(model, function, signatureType, read)
         }
     }
 

@@ -17,6 +17,9 @@ KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-a
 
 - Tek katmanlı anotasyon ailesi: `@Read` / `@Write` / `@Erase` / `@EraseAll`
 - `@Read` iki şekli destekler: `Flow<T?>` ve `suspend fun (): T?`
+- `@Write` / `@Erase` / `@EraseAll` de iki şekli destekler: `suspend fun (): Unit` ve
+  `fun (…): Flow<Unit>`. `Flow` şekli soğuktur — `collect` edilmeyen yazma hiç olmaz, ne diske
+  yazar ne `PreferenceListener`'ı tetikler; davranış `FlowSamplePreferencesTest` ile sabitlendi
 - Tip imzadan çıkarılır; `@StringPreference` ailesi kaldırıldı
 - `defaultValue` kaldırıldı; okumalar daima nullable
 - Bildirilen tip üretilen imzaya birebir taşınır: tip argümanları, nullability ve import'lar
@@ -26,7 +29,8 @@ KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-a
 - Nullable `@Write` parametresine `null` yazmak anahtarı siler
 - Üretilen anahtar sabitlerinin adları çarpışmaz; uzun ortak önekli iki anahtar (örn.
   `notification_settings_enabled` / `notification_settings_muted`) artık aynı sabite inmiyor
-- `Result<T>` ve `Flow<Unit>` sarmalamaları desteklenmiyor
+- `Result<T>` sarmalaması desteklenmiyor; `@Write`'ta `Flow<Int>` gibi `Unit` taşımayan bir
+  `Flow` de reddedilir
 - Üretilen sınıf `Context` yerine `DataStore<Preferences>` alır
 - `PreferencesFactory` / `@ConstructedBy` / reflection kaldırıldı
 - `PreferenceListener`: yazma/silme/hata kancaları; hatalar raporlanır ve yeniden fırlatılır

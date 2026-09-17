@@ -3,6 +3,7 @@ package io.github.sahsenvar.kmemory.compiler.usecase
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
+import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
 
 /**
  * `@Write` tasiyan bir fonksiyonun `override` govdesini uretir (spec §4.0, §6).
@@ -15,6 +16,13 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
  *   sonra AYNI hata yeniden firlatilir.
  *   Upstream `dataStore.edit`'i ciplak birakiyordu, yani disk hatasi cagrildigi yere
  *   ham sekilde sizip hangi anahtarda oldugu bilgisini kaybediyordu.
+ *
+ * Iki donus sekli de yerlesiktir (spec §4.0):
+ * - [ReturnShape.SUSPEND] → `suspend fun x(value: T)`, is cagri aninda yapilir.
+ * - [ReturnShape.FLOW] → `fun x(value: T): Flow<Unit>`, is COLLECT aninda yapilir ve ardindan
+ *   tek bir `Unit` yayilir. Sogukluk bilinclidir: collect edilmeyen yazma HIC olmaz. Zad'in
+ *   `RemoteSource`'lari da ayni sekli tasidigi icin repository idiomu birebir ayni kalir
+ *   (`flow { emitAll(source.writeX(v)) }.flowOn(ioContext)`).
  *
  * `json` serilestirici ADI ile kullanilir (upstream'in `Json` companion nesnesi degil):
  * ornek yapilandirilabilir olmali ki tuketici `ignoreUnknownKeys` gibi ayarlari secebilsin.
@@ -37,16 +45,25 @@ internal class GenerateWriteFunctionUseCase {
         // pratikte ulasilmazdir.
         val parameterType = function.declaredType?.source ?: model.type.simpleName
         val nullable = function.declaredType?.isNullable == true
+        val parameters = "value: $parameterType"
 
-        return "    override suspend fun ${function.name}(value: $parameterType) {\n" +
-            "        try {\n" +
-            editBlock(model, nullable) + "\n" +
-            "            listener.onWrite(STORE_NAME, ${model.keyNameProperty})\n" +
-            "        } catch (error: Throwable) {\n" +
-            "            report(${model.keyNameProperty}, error)\n" +
-            "            throw error\n" +
-            "        }\n" +
-            "    }"
+        return when (function.returnShape) {
+            ReturnShape.SUSPEND -> MutationBody.suspending(
+                name = function.name,
+                parameters = parameters,
+                work = editBlock(model, nullable, indent = INDENT_SUSPEND),
+                notify = "listener.onWrite(STORE_NAME, ${model.keyNameProperty})",
+                keyArgument = model.keyNameProperty,
+            )
+
+            ReturnShape.FLOW -> MutationBody.flowing(
+                name = function.name,
+                parameters = parameters,
+                work = editBlock(model, nullable, indent = INDENT_FLOW),
+                notify = "listener.onWrite(STORE_NAME, ${model.keyNameProperty})",
+                keyArgument = model.keyNameProperty,
+            )
+        }
     }
 
     /**
@@ -56,20 +73,23 @@ internal class GenerateWriteFunctionUseCase {
      * etmez. Bu yuzden nullable yazmada `null` "anahtari sil" anlamina gelir: tek alternatif
      * olan "null'i yok say" cagirani sessizce yaniltirdi, cunku `readX()` eski degeri
      * dondurmeye devam ederdi.
+     *
+     * @param indent Blogun ilk satirinin onune yazilacak girinti; iki donus sekli farkli
+     *   derinlikte oldugu icin disaridan verilir.
      */
-    private fun editBlock(model: PreferenceModel, nullable: Boolean): String {
+    private fun editBlock(model: PreferenceModel, nullable: Boolean, indent: String): String {
         if (!nullable) {
-            return "            dataStore.edit { prefs -> prefs[${model.keyProperty}] = ${storedExpression(model)} }"
+            return "${indent}dataStore.edit { prefs -> prefs[${model.keyProperty}] = ${storedExpression(model)} }"
         }
 
-        return "            dataStore.edit { prefs ->\n" +
-            "                val stored = ${nullableStoredExpression(model)}\n" +
-            "                if (stored == null) {\n" +
-            "                    prefs.remove(${model.keyProperty})\n" +
-            "                } else {\n" +
-            "                    prefs[${model.keyProperty}] = stored\n" +
-            "                }\n" +
-            "            }"
+        return "${indent}dataStore.edit { prefs ->\n" +
+            "$indent    val stored = ${nullableStoredExpression(model)}\n" +
+            "$indent    if (stored == null) {\n" +
+            "$indent        prefs.remove(${model.keyProperty})\n" +
+            "$indent    } else {\n" +
+            "$indent        prefs[${model.keyProperty}] = stored\n" +
+            "$indent    }\n" +
+            "$indent}"
     }
 
     /**
@@ -91,4 +111,12 @@ internal class GenerateWriteFunctionUseCase {
             PreferenceType.OBJECT -> "value?.let { json.encodeToString(it) }"
             else -> "value"
         }
+
+    private companion object {
+        /** `try {` icindeki govdenin girintisi. */
+        const val INDENT_SUSPEND = "            "
+
+        /** `flow {` icindeki govdenin girintisi. */
+        const val INDENT_FLOW = "        "
+    }
 }

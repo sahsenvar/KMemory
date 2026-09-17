@@ -90,7 +90,7 @@ internal class ValidateInterfaceUseCase(
         }
 
         val valueType = if (returnsFlow) returned?.arguments?.firstOrNull()?.type?.resolve() else returned
-        val builtIn = isBuiltInShape(model.accessor, outerFqName, valueType)
+        val builtIn = isBuiltInShape(model.accessor, valueType)
 
         // spec §4.1 — 0.1.0'da YALNIZCA yerlesik sekiller gecer.
         //
@@ -100,9 +100,10 @@ internal class ValidateInterfaceUseCase(
         // olarak KALIR, isleyici hicbir tipi gevsetmez.
         if (!builtIn) {
             logger.error(
-                "$label: '$outerFqName' yerleşik bir dönüş şekli değil. " +
+                "$label: '${shapeLabel(returnsFlow, outerFqName, valueType)}' yerleşik bir " +
+                    "dönüş şekli değil. " +
                     "Yerleşik şekiller — @Read: Flow<T?> ya da suspend fun (): T?; " +
-                    "@Write/@Erase/@EraseAll: suspend fun (): Unit. " +
+                    "@Write/@Erase/@EraseAll: Flow<Unit> ya da suspend fun (): Unit. " +
                     "Adaptör bağlantısı 0.2.0'da gelecek; 0.1.0'da kmemory.adapters hiçbir tipi " +
                     "gevşetmez (spec §4.1).",
                 function,
@@ -212,13 +213,35 @@ internal class ValidateInterfaceUseCase(
      *
      * `@Read`: `Flow<T?>` ya da `T?`, T [isStorableShape]'e uymak kaydiyla.
      *
-     * `@Write` / `@Erase` / `@EraseAll`: yalnizca `Unit`.
+     * `@Write` / `@Erase` / `@EraseAll`: `Flow<Unit>` ya da `Unit`.
+     *
+     * Olcut her iki erisimde de DIS tipe degil TASINAN degere bakar: [valueType], `Flow`
+     * donuyorsa tip argumani, donmuyorsa donus tipinin kendisidir. Boylece `Flow<Unit>` ile
+     * `Unit` tek kuraldan gecer ve `Flow<Int>` gibi bir sekil elenir — yazmanin yayacak bir
+     * degeri yoktur. Yildiz izdusumunde (`Flow<*>`) argumanin cozulmus tipi yoktur, yani
+     * [valueType] `null` kalir ve sekil reddedilir.
      */
-    private fun isBuiltInShape(accessor: Accessor, outerFqName: String?, valueType: KSType?): Boolean =
+    private fun isBuiltInShape(accessor: Accessor, valueType: KSType?): Boolean =
         when (accessor) {
             Accessor.READ -> valueType != null && isStorableShape(valueType)
-            else -> outerFqName == UNIT_FQ_NAME
+            else -> valueType?.declaration?.qualifiedName?.asString() == UNIT_FQ_NAME
         }
+
+    /**
+     * Hata mesajinda gosterilecek donus sekli.
+     *
+     * Ciplak `'kotlinx.coroutines.flow.Flow'` yazmak yaniltici olurdu: `Flow<Unit>` yerlesik,
+     * `Flow<Int>` degil — fark tip argumanindadir ve mesaj onu gostermek zorunda.
+     */
+    private fun shapeLabel(returnsFlow: Boolean, outerFqName: String?, valueType: KSType?): String {
+        if (!returnsFlow) return outerFqName ?: UNKNOWN_TYPE
+
+        val argument = valueType?.let { type ->
+            type.declaration.simpleName.asString() + if (type.isMarkedNullable) "?" else ""
+        } ?: UNKNOWN_TYPE
+
+        return "Flow<$argument>"
+    }
 
     /**
      * Okunan degerin diske yazilabilir bir tip olup olmadigi.
@@ -267,6 +290,9 @@ internal class ValidateInterfaceUseCase(
     private companion object {
         const val FLOW_FQ_NAME = "kotlinx.coroutines.flow.Flow"
         const val UNIT_FQ_NAME = "kotlin.Unit"
+
+        /** Cozulemeyen tipin hata mesajindaki karsiligi (`Flow<*>` gibi). */
+        const val UNKNOWN_TYPE = "*"
 
         /** Her tipin ustundeki uyeler; uretime konu degildir. */
         val ANY_FQ_NAMES = setOf("kotlin.Any", "java.lang.Object")

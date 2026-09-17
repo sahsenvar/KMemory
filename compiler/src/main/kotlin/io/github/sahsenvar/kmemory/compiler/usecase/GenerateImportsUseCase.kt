@@ -4,7 +4,7 @@ import io.github.sahsenvar.kmemory.compiler.model.Accessor
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
-import io.github.sahsenvar.kmemory.compiler.model.ReadShape
+import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
 
 /**
  * Uretilen dosyanin paket bildirimi ve import blogunu uretir.
@@ -16,6 +16,10 @@ import io.github.sahsenvar.kmemory.compiler.model.ReadShape
  *
  * Anahtar fabrikalari da ayni sekilde kullanilana gore secilir; `stringPreferencesKey`
  * [PreferenceType.OBJECT] icin de ayni fabrika oldugundan `distinct()` tekrar uretmez.
+ *
+ * Akis importlari ERISIME degil DONUS SEKLINE bakar (spec §4.0): `Flow<Unit>` donen bir
+ * `@Write` de `Flow`, `flow` ve `catch` ister. Secim `reads`'e bagli kalsaydi Flow donen
+ * yazma "unresolved reference: flow" ile patlardi.
  */
 internal class GenerateImportsUseCase {
 
@@ -32,10 +36,16 @@ internal class GenerateImportsUseCase {
         models: List<PreferenceModel>,
     ): String {
         val reads = functions.filter { it.accessor == Accessor.READ }
+        val mutations = functions.filter { it.accessor != Accessor.READ }
         // WRITE/ERASE/ERASE_ALL govdelerinin tamami `dataStore.edit` cagirir; salt-okunur bir
         // arayuzde bu import hic uretilmez.
-        val mutates = functions.any { it.accessor != Accessor.READ }
+        val mutates = mutations.isNotEmpty()
         val needsJson = models.any { it.type == PreferenceType.OBJECT }
+
+        // `Flow` ve `catch` iki tarafta da kullanilir; `map`/`first` yalnizca okumada,
+        // `flow` builder'i yalnizca Flow donen yazma/silmede.
+        val anyFlowReturn = functions.any { it.returnShape == ReturnShape.FLOW }
+        val needsFlowBuilder = mutations.any { it.returnShape == ReturnShape.FLOW }
 
         val imports = buildList {
             add(DATA_STORE)
@@ -46,14 +56,15 @@ internal class GenerateImportsUseCase {
             add(PREFERENCE_LISTENER)
             // Uretilen `report()` yardimcisi her sinifta var; sarmalayici kosulsuz gerekir.
             add(PREFERENCE_SERIALIZATION_EXCEPTION)
-            if (reads.any { it.readShape == ReadShape.FLOW }) {
+            if (anyFlowReturn) {
                 add(FLOW)
                 add(FLOW_CATCH)
-                add(FLOW_MAP)
             }
-            // readShape null kalirsa GenerateReadFunctionUseCase suspend seklini uretir;
-            // import secimi de AYNI varsayimi yapmak zorunda.
-            if (reads.any { it.readShape != ReadShape.FLOW }) add(FLOW_FIRST)
+            // Sira alfabetiktir (catch < first < flow < map); uretilen dosya el yazimi gibi
+            // okunsun diye.
+            if (reads.any { it.returnShape == ReturnShape.SUSPEND }) add(FLOW_FIRST)
+            if (needsFlowBuilder) add(FLOW_BUILDER)
+            if (reads.any { it.returnShape == ReturnShape.FLOW }) add(FLOW_MAP)
             if (needsJson) add(JSON)
             // Imzalarda gorunen tiplerin import'lari; tip argumanlari dahil her seviye
             // buradan gelir, cunku `Flow<Map<String, Profile>?>` imzasi `Profile`'i de
@@ -85,6 +96,7 @@ internal class GenerateImportsUseCase {
         const val PREFERENCE_SERIALIZATION_EXCEPTION =
             "io.github.sahsenvar.kmemory.listener.PreferenceSerializationException"
         const val FLOW = "kotlinx.coroutines.flow.Flow"
+        const val FLOW_BUILDER = "kotlinx.coroutines.flow.flow"
         const val FLOW_CATCH = "kotlinx.coroutines.flow.catch"
         const val FLOW_FIRST = "kotlinx.coroutines.flow.first"
         const val FLOW_MAP = "kotlinx.coroutines.flow.map"

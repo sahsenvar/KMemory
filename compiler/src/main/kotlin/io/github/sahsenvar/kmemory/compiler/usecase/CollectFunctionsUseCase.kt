@@ -7,7 +7,7 @@ import io.github.sahsenvar.kmemory.annotation.Read
 import io.github.sahsenvar.kmemory.annotation.Write
 import io.github.sahsenvar.kmemory.compiler.model.Accessor
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
-import io.github.sahsenvar.kmemory.compiler.model.ReadShape
+import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
 
 /**
  * Bir `@Preferences` arayuzunun SOYUT fonksiyonlarini [FunctionModel] listesine cevirir.
@@ -24,6 +24,10 @@ import io.github.sahsenvar.kmemory.compiler.model.ReadShape
  * Tip HER ZAMAN [RenderTypeUseCase]'den gecer. Once `declaration.simpleName` aliniyordu; bu
  * tip argumanlarini ve nullability'yi dusurup `List<SearchHistory>`'yi `List`'e,
  * `String?`'i `String`'e indiriyor ve uretilen sinifi derlenemez hale getiriyordu.
+ *
+ * [ReturnShape] dort erisimin HEPSI icin ayni sekilde, bildirilen donus tipinden cikarilir:
+ * `Flow` donen fonksiyon [ReturnShape.FLOW], donmeyen [ReturnShape.SUSPEND]'dir. Sekil eskiden
+ * yalnizca `@Read` icin tutuluyordu; yazma/silmenin `Flow<Unit>` sekli bu yuzden uretilemiyordu.
  */
 internal class CollectFunctionsUseCase(
     private val renderTypeUseCase: RenderTypeUseCase,
@@ -34,26 +38,30 @@ internal class CollectFunctionsUseCase(
         declaredFunctions.mapNotNull(::toModel)
 
     private fun toModel(function: KSFunctionDeclaration): FunctionModel? {
+        val returned = function.returnType?.resolve()
+        val isFlow = returned?.declaration?.qualifiedName?.asString() == FLOW_FQ_NAME
+        val shape = if (isFlow) ReturnShape.FLOW else ReturnShape.SUSPEND
+
         keyOf(function, Read::class.simpleName)?.let { key ->
-            val returned = function.returnType?.resolve()
-            val isFlow = returned?.declaration?.qualifiedName?.asString() == FLOW_FQ_NAME
+            // Okunan deger `Flow`'un tip argumanidir; Flow olmayan sekilde donus tipinin kendisi.
             val value = if (isFlow) returned?.arguments?.firstOrNull()?.type?.resolve() else returned
             return FunctionModel(
                 name = function.simpleName.asString(),
                 accessor = Accessor.READ,
                 key = key,
-                readShape = if (isFlow) ReadShape.FLOW else ReadShape.SUSPEND,
+                returnShape = shape,
                 declaredType = renderTypeUseCase(value),
             )
         }
 
         keyOf(function, Write::class.simpleName)?.let { key ->
+            // Yazmanin tipi DONUS tipinden degil, tek parametreden gelir; iki sekilde de ayni.
             val parameter = function.parameters.firstOrNull()?.type?.resolve()
             return FunctionModel(
                 name = function.simpleName.asString(),
                 accessor = Accessor.WRITE,
                 key = key,
-                readShape = null,
+                returnShape = shape,
                 declaredType = renderTypeUseCase(parameter),
             )
         }
@@ -63,7 +71,7 @@ internal class CollectFunctionsUseCase(
                 name = function.simpleName.asString(),
                 accessor = Accessor.ERASE,
                 key = key,
-                readShape = null,
+                returnShape = shape,
                 declaredType = null,
             )
         }
@@ -73,7 +81,7 @@ internal class CollectFunctionsUseCase(
                 name = function.simpleName.asString(),
                 accessor = Accessor.ERASE_ALL,
                 key = null,
-                readShape = null,
+                returnShape = shape,
                 declaredType = null,
             )
         }
