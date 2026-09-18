@@ -9,6 +9,7 @@ import io.github.sahsenvar.kmemory.annotation.Preferences
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.model.Accessor
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
+import io.github.sahsenvar.kmemory.compiler.model.KeyConstantNaming
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
 
@@ -187,7 +188,7 @@ internal class GenerateImplementationUseCase(
         }
 
         return "    companion object {\n" +
-            "        const val STORE_NAME = \"$storeName\"\n" +
+            "        const val ${KeyConstantNaming.STORE_NAME_IDENTIFIER} = \"$storeName\"\n" +
             keys +
             "\n    }"
     }

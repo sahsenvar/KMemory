@@ -23,8 +23,8 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
  * 3. Kalani UPPER_SNAKE_CASE'e cevir.
  * 4. Kalan bos ya da gecerli bir tanimlayici son eki degilse kirpilmis-hex'e dus.
  * 5. Ayni TANIMLAYICIYI ureten CARPISAN TUM gruplara grup indeksi eklenir; carpismayanlar
- *    indekssiz kalir. Tekillik ekler uzerinden degil, [KeyConstantNaming] uzaylarinin uretecegi
- *    son adlar uzerinden olculur.
+ *    HER durumda indekssiz kalir. Tekillik ekler uzerinden degil, [KeyConstantNaming] uzaylarinin
+ *    uretecegi son adlar uzerinden olculur.
  */
 internal class DeriveConstantSuffixUseCase {
 
@@ -47,13 +47,27 @@ internal class DeriveConstantSuffixUseCase {
             .takeIf { it.isValidSuffix() }
 
     /**
-     * Ad turetilemediginde kullanilan eski bicim: anahtarin ilk [HEX_LENGTH] alfanumerigi +
+     * Ad turetilemediginde kullanilan eski bicim: anahtarin ilk [HEX_LENGTH] ASCII alfanumerigi +
      * grup indeksi. Indeks burada ZORUNLUDUR: uzun ortak onekli anahtarlar
      * ("notification_settings_enabled" ile "notification_settings_muted") ayni kirpilmis one
      * inip companion'da "Conflicting declarations" uretir.
+     *
+     * Suzgec ASCII'dir, `isLetterOrDigit()` DEGIL: ikincisi Unicode farkindadir ve anahtar metni
+     * ASCII disi harf tasidiginda tanimlayiciya oldugu gibi gecirirdi (`RAW_URUNDEGERI_0` yerine
+     * `RAW_ÜRÜNDEĞERI_0`). Bugun derleniyor olmasi tesaduf; [isValidSuffix] turetilmis yolda ayni
+     * seyi zaten reddediyordu, yani degismez iki yolun BIRINDE tutmuyordu.
+     *
+     * Anahtarda hic ASCII alfanumerik yoksa geriye yalnizca indeks kalirdi (`_0`, tanimlayici
+     * olarak gecerli ama okunaksiz); o durumda [FALLBACK_STEM] kullanilir.
      */
-    private fun fallbackSuffix(key: String, index: Int): String =
-        key.filter { it.isLetterOrDigit() }.uppercase().take(HEX_LENGTH) + "_" + index
+    private fun fallbackSuffix(key: String, index: Int): String {
+        val stem = key.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }
+            .uppercase()
+            .take(HEX_LENGTH)
+            .ifEmpty { FALLBACK_STEM }
+
+        return stem + "_" + index
+    }
 
     /**
      * Onek yalnizca KELIME SINIRINDA soyulur: `readPinCode` -> `PinCode`, ama `reader` -> `reader`
@@ -134,10 +148,36 @@ internal class DeriveConstantSuffixUseCase {
             }
         }
 
-        return if (current.clashingSuffixes().isEmpty()) {
-            current
-        } else {
-            current.mapIndexed { index, suffix -> "${suffix}_$index" }
+        return if (current.clashingSuffixes().isEmpty()) current else current.resolvedPositionally()
+    }
+
+    /**
+     * Son care: yalnizca HALA carpisan konumlar ad degistirir.
+     *
+     * Onceki bicim indeksi AYRIMSIZ herkese ekliyordu; boylece ayni arayuzdeki alakasiz bir
+     * patolojik kume yuzunden hicbir seyle carpismayan bir grup da adini kaybediyordu
+     * (`readZebra` -> `ZEBRA_5`). Bu, bu sinifin "indeks gerektiginde eklenir" ozelligini
+     * ihlal ediyordu.
+     *
+     * Tarama ilk-gelen-kazanir: bir konumun uretecegi tanimlayicilardan hicbiri daha once
+     * alinmamissa ad oldugu gibi kalir, aksi halde `_<konum>` eklenerek bos bir ada inilir.
+     * Dongu sonlanir cunku her tur adi UZATIR ve `taken` sonludur; en gec alinan en uzun addan
+     * daha uzun bir aday bos cikar. Tekillik garantidir: kabul edilen her adin TUM tanimlayicilari
+     * `taken`'a girer ve sonraki adaylar bunlarin hicbirine dokunamaz.
+     *
+     * Ana iki pas simetriyi korur (carpisan gruplarin HEPSI indeks alir); asimetri yalnizca bu
+     * patolojik yolda ortaya cikar.
+     */
+    private fun List<String>.resolvedPositionally(): List<String> {
+        val taken = mutableSetOf<String>()
+
+        return mapIndexed { index, suffix ->
+            var candidate = suffix
+            while (KeyConstantNaming.identifiers(candidate).any { it in taken }) {
+                candidate = "${candidate}_$index"
+            }
+            taken += KeyConstantNaming.identifiers(candidate)
+            candidate
         }
     }
 
@@ -161,6 +201,9 @@ internal class DeriveConstantSuffixUseCase {
 
         /** Soyulan erisim onekleri; hicbiri digerinin oneki degildir, sira onemsizdir. */
         val ACCESS_PREFIXES = listOf("delete", "erase", "clear", "write", "read", "get", "set", "put")
+
+        /** Anahtarda tek bir ASCII alfanumerik bile yoksa kullanilan govde. */
+        const val FALLBACK_STEM = "PREF"
 
         const val HEX_LENGTH = 20
         const val MAX_DISAMBIGUATION_PASSES = 2
