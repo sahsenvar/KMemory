@@ -10,7 +10,7 @@ mavenPublishing {
     coordinates(
         groupId = "io.github.sahsenvar",
         artifactId = "kmemory-compiler",
-        version = "0.1.0"
+        version = providers.gradleProperty("kmemoryVersion").get()
     )
 
     pom {

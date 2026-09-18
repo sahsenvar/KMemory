@@ -56,7 +56,7 @@ mavenPublishing {
     coordinates(
         groupId = "io.github.sahsenvar",
         artifactId = "kmemory-annotations",
-        version = "0.1.0"
+        version = providers.gradleProperty("kmemoryVersion").get()
     )
 
     pom {
