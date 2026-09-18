@@ -55,7 +55,13 @@ internal class GenerateReadFunctionUseCase {
         }
     }
 
-    /** `fun x(): Flow<T?>` — soguk akis, her degisimde yeniden yayinlar. */
+    /**
+     * `fun x(): Flow<T?>` — soguk akis, her degisimde yeniden yayinlar.
+     *
+     * Okunan deger `map` lambda'sinin icinde TIPLI BIR YERELE baglanir; gerekcesi
+     * [typedBinding]'dedir. Tek satirlik `.map { prefs -> prefs[KEY] }` sekli, diskteki tip
+     * uyusmazliginin `.catch`'in ASAGISINDA patlamasina yol aciyordu.
+     */
     private fun generateFlow(
         model: PreferenceModel,
         function: FunctionModel,
@@ -64,11 +70,20 @@ internal class GenerateReadFunctionUseCase {
     ): String = """
         |    override fun ${function.name}(): Flow<$type> =
         |        dataStore.data
-        |            .map { prefs -> $read }
+        |            .map { prefs ->
+        |${typedBinding(type, read, indent = 16)}
+        |            }
         |            .catch { error -> throw report(${model.keyNameProperty}, error) }
     """.trimMargin()
 
-    /** `suspend fun x(): T?` — tek seferlik okuma; akisin ilk degeri alinir. */
+    /**
+     * `suspend fun x(): T?` — tek seferlik okuma; akisin ilk degeri alinir.
+     *
+     * Bu sekilde donusum `try` blogunun ICINDE zaten oluyordu (derleyici `try` ifadesinin
+     * degerini bildirilen tipe cevirmek zorunda). Baglama yine de ACIKCA yaziliyor: ayni
+     * garantinin iki sekilde de AYNI mekanizmadan gelmesi, birinin sessizce kaymasini
+     * engeller.
+     */
     private fun generateSuspend(
         model: PreferenceModel,
         function: FunctionModel,
@@ -77,11 +92,46 @@ internal class GenerateReadFunctionUseCase {
     ): String = """
         |    override suspend fun ${function.name}(): $type =
         |        try {
-        |            dataStore.data.first().let { prefs -> $read }
+        |${typedBinding(type, "dataStore.data.first().let { prefs -> $read }", indent = 12)}
         |        } catch (error: Throwable) {
         |            throw report(${model.keyNameProperty}, error)
         |        }
     """.trimMargin()
+
+    /**
+     * Okunan degeri, bildirilen tipiyle ADLANDIRILMIS bir yerele baglar ve yereli sonuc yapar.
+     *
+     * Tek amaci JVM'de `checkcast`'i buraya — yani akisin ve `try`'in ICINE — cektirmektir.
+     *
+     * Sorun sudur: `Preferences.get` jeneriktir (`fun <T> get(key: Key<T>): T?`), yani degeri
+     * KONTROLSUZ cevirir; gercek kontrol, derleyicinin donus degerini bildirilen tipe
+     * cevirdigi YERDE olusur. `.map { prefs -> prefs[KEY] }` yazildiginda lambda'nin donus
+     * tipi `map`'in tip degiskeni `R`'dir ve `R` `Object`'e silinir — cevrilecek bir sey
+     * yoktur, `checkcast` uretilmez. Deger akistan `Object` olarak cikar ve ilk kez CAGIRANIN
+     * kodunda cevrilir: `.catch` bu hatayi hicbir zaman gormez, dinleyici hic haberdar
+     * olmaz. (Diskte ayni anahtara `stringPreferencesKey` ile yazilmis bir deger
+     * `intPreferencesKey` ile okundugunda olan tam olarak budur.)
+     *
+     * Bildirilen tipi `.map<Preferences, T?> { ... }` diye ACIKCA yazmak bunu COZMEZ:
+     * cikarim zaten ayni tipi buluyordu, uretilen imza degismez, lambda'nin silinmis donus
+     * tipi yine `Object` kalir. Coz'en sey tip ARGUMANI degil, JENERIK OLMAYAN BIR HEDEFE
+     * BAGLAMADIR — bu yuzden tipli bir yerel kullaniliyor. (Ayni etki `as T?` ile de
+     * alinabilirdi ama ifade zaten o tipte oldugu icin `USELESS_CAST` uyarisi dogar; uyariyi
+     * hataya ceviren tuketicilerde uretilen kod derlenmezdi.)
+     *
+     * Sonucta olusan [ClassCastException] SANITIZE EDILMEZ: mesaji yalnizca sinif adlarini
+     * tasir, saklanan degeri tasimaz — ve gercek bir veri bozulmasi isareti oldugu icin
+     * dinleyicinin tam da gormesi gereken seydir. Bu yuzden baglama `serializing(key) { }`
+     * sinirinin DISINDADIR.
+     *
+     * @param type Fonksiyonun bildirdigi deger tipi, or. `Int?` ya da `List<String>?`.
+     * @param expression Degeri ureten ifade.
+     * @param indent Uretilen iki satirin basina konacak bosluk sayisi.
+     */
+    private fun typedBinding(type: String, expression: String, indent: Int): String {
+        val padding = " ".repeat(indent)
+        return "${padding}val $VALUE_NAME: $type = $expression\n$padding$VALUE_NAME"
+    }
 
     /**
      * Tek bir `Preferences` anlik goruntusunden degeri okuyan ifade.
@@ -90,15 +140,22 @@ internal class GenerateReadFunctionUseCase {
      * cozulur; `?.let` sayesinde anahtar yoksa cozme hic denenmez ve `null` doner.
      *
      * Cozme `serializing(key) { }` icindedir — sanitizasyon sinirini ciziyor. `let`
-     * parametresi `stored` diye ADLANDIRILIR: ic blok da lambda oldugu icin adsiz birakilan
-     * `it` okuyani yaniltirdi.
+     * parametresi `raw` diye ADLANDIRILIR: ic blok da lambda oldugu icin adsiz birakilan
+     * `it` okuyani yaniltirdi; ayrica [typedBinding]'in urettigi `stored` yerelini
+     * golgelememesi gerekir.
      */
     private fun readExpression(model: PreferenceModel, decodeType: String): String =
         when (model.type) {
             PreferenceType.OBJECT ->
-                "prefs[${model.keyProperty}]?.let { stored -> " +
-                    "serializing(${model.keyNameProperty}) { json.decodeFromString<$decodeType>(stored) } }"
+                "prefs[${model.keyProperty}]?.let { raw -> " +
+                    "serializing(${model.keyNameProperty}) { json.decodeFromString<$decodeType>(raw) } }"
 
             else -> "prefs[${model.keyProperty}]"
         }
+
+    private companion object {
+
+        /** [typedBinding]'in urettigi yerelin adi. */
+        const val VALUE_NAME = "stored"
+    }
 }

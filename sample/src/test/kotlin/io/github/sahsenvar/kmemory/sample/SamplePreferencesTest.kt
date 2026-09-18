@@ -269,6 +269,48 @@ class SamplePreferencesTest {
         }
     }
 
+    /**
+     * Spec §8 — diskteki TIP UYUSMAZLIGI da raporlanmak zorunda.
+     *
+     * Ayni anahtara bir surum `stringPreferencesKey` ile yazip sonraki surum
+     * `intPreferencesKey` ile okuyorsa (sema gocu, elle yazilmis eski kod, ya da anahtar
+     * carpismasi) `Preferences.get` jeneriktir: degeri KONTROLSUZ cevirir. Olusan
+     * [ClassCastException] gercek bir veri bozulmasi isaretidir ve tam olarak dinleyicinin
+     * gormesi gereken seydir.
+     *
+     * Bu bir GIZLILIK sorunu DEGILDIR: [ClassCastException] mesaji yalnizca sinif adlarini
+     * tasir, saklanan degeri tasimaz. Dolayisiyla hata sanitize EDILMEMELI, dinleyiciye
+     * oldugu gibi gitmelidir — testin `assertIs<ClassCastException>` beklemesi bunu sabitler.
+     *
+     * Ilk kosuda dinleyici HIC cagrilmiyordu: `.map { prefs -> prefs[KEY] }` lambda'sinin
+     * silinmis donus tipi `Object` oldugu icin `checkcast` akisin DISINDA, `.catch`'in
+     * ASAGISINDA uretiliyordu; ayni sebeple suspend seklinde de `try/catch`'in disinda
+     * kaliyordu. Cagiran hatayi aliyor, kutuphane hicbir sey gormuyordu.
+     */
+    @Test
+    fun `diskteki tip uyusmazligi cagirana gider ve dinleyiciye sanitize edilmeden raporlanir`() = runTest {
+        val dataStore = store()
+        dataStore.edit { prefs -> prefs[stringPreferencesKey(KEY_COUNT)] = YANLIS_TIPLI_DEGER }
+        val raporlanan = mutableListOf<Throwable>()
+        val listener = object : PreferenceListener {
+            override fun onError(store: String, key: String?, error: Throwable) {
+                raporlanan += error
+            }
+        }
+        val p = SamplePreferencesImpl(dataStore, Json, listener)
+
+        // `inc()` gercek bir `Int` ister; kutu acma checkcast'i cagri noktasinda da zorlar,
+        // yani "cagirana hata gidiyor" yarisi duzeltmeden ONCE de gozlenebilir.
+        assertFailsWith<ClassCastException> { p.readCount().first()?.inc() }
+        assertFailsWith<ClassCastException> { p.readCountOnce()?.inc() }
+
+        assertEquals(2, raporlanan.size, "her iki okuma sekli de raporlamali")
+        raporlanan.forEach { error ->
+            // Sanitize EDILMEMELI: sinif adlari deger tasimaz, tani icin gereklidirler.
+            assertIs<ClassCastException>(error)
+        }
+    }
+
     // --- hata yolu: suspend sekli (spec §8 "raporla ve YENIDEN FIRLAT") --------------------
 
     /**
@@ -379,5 +421,8 @@ class SamplePreferencesTest {
 
         /** Yalnizca hata yolu testlerinde kullanilan disk hatasi mesaji. */
         const val DISK_HATASI = "disk okunamadi/yazilamadi"
+
+        /** `KEY_COUNT`'a `Int` yerine yazilan deger; okuma tarafinda tip uyusmazligi uretir. */
+        const val YANLIS_TIPLI_DEGER = "int-degil-string"
     }
 }
