@@ -14,7 +14,9 @@ kotlin {
 
     // KMemory calisma-zamani nesnesi paylasilan degistirilebilir bir store onbellegi tutuyor.
     // 0.1.0'da atomicfu eklemek yerine bu yuzey JVM + Android'e sabitlendi; anotasyonlar,
-    // PreferenceListener ve ReturnAdapter commonMain'de kalir (iOS dahil tum hedefler).
+    // PreferenceListener, PreferenceFailure ve ReturnAdapter commonMain'de kalir (iOS dahil
+    // tum hedefler). PreferenceFailure'in FABRIKASI (from) jvmAndAndroidMain'dedir: yalnizca
+    // JVM bir Throwable'in sinif adini ve yigin karelerini okuyabilir.
     applyDefaultHierarchyTemplate {
         common {
             group("jvmAndAndroid") {
@@ -30,6 +32,13 @@ kotlin {
             api(libs.data.store.preferences)
             api(libs.kotlinx.coroutines)
             api(libs.kotlinx.serialization.json)
+        }
+
+        // Ortak yuzeyin ORTAK derlemede tutarli oldugunu dogrulayan testler burada durur;
+        // bkz. CommonListenerSurfaceTest. Kirmizi/yesil farki yalnizca jvmAndAndroid'i
+        // gormeyen bir hedefte (compileTestKotlinIosSimulatorArm64) olusur.
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
         }
     }
 }

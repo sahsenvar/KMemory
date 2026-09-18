@@ -16,8 +16,10 @@ import kotlinx.serialization.json.Json
  * Bu tip `commonMain`'de DEGIL, JVM ve Android hedeflerinin paylastigi kaynak kumesindedir.
  * [stores] onbellegi paylasilan degistirilebilir durumdur ve es zamanlilik korumasi ister;
  * 0.1.0'da `kotlinx-atomicfu` bagimliligi eklemek yerine calisma-zamani yuzeyi JVM/Android'e
- * sabitlendi ve `synchronized` kullanildi. Anotasyonlar, [PreferenceListener] ve
- * [ReturnAdapter] `commonMain`'de kalir, yani iOS dahil tum hedeflerde gorulur.
+ * sabitlendi ve `synchronized` kullanildi. Anotasyonlar, [PreferenceListener],
+ * [io.github.sahsenvar.kmemory.listener.PreferenceFailure] ve [ReturnAdapter] `commonMain`'de
+ * kalir, yani iOS dahil tum hedeflerde gorulur — dinleyici sozlesmesinin iki ucu (arayuz ve
+ * hata tipi) ayni kaynak kumesinde olmak zorundadir, yoksa ortak tuketici sozlesmeyi okuyamaz.
  * iOS icin calisma-zamani gerektiginde atomicfu karari orada verilecek.
  *
  * @property storeFactory dosya adindan bir [DataStore] ureten fabrika

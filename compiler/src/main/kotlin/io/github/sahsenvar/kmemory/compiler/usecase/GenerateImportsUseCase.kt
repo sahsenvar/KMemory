@@ -56,6 +56,11 @@ internal class GenerateImportsUseCase {
             // Kosulsuz: uretilen `report()` hangi erisim olursa olsun dinleyiciye daima bir
             // PreferenceFailure verir, yani salt-ilkel bir arayuzde de kullanilir.
             add(PREFERENCE_FAILURE)
+            // `from` bir COMPANION UZANTISIDIR: tip commonMain'de, kurucusu yalnizca JVM'in
+            // tasiyabilecegi iki satir oldugu icin fabrika jvmAndAndroidMain'de durur. Cagri
+            // sekli `PreferenceFailure.from(...)` olarak kalir ama uzanti import EDILMEDEN
+            // cozulmez; bu satir dusunce uretilen kod "unresolved reference: from" ile patlar.
+            add(PREFERENCE_FAILURE_FROM)
             add(PREFERENCE_LISTENER)
             if (anyFlowReturn) {
                 add(FLOW)
@@ -95,6 +100,7 @@ internal class GenerateImportsUseCase {
         const val KMEMORY = "io.github.sahsenvar.kmemory.KMemory"
         const val PREFERENCE_LISTENER = "io.github.sahsenvar.kmemory.listener.PreferenceListener"
         const val PREFERENCE_FAILURE = "io.github.sahsenvar.kmemory.listener.PreferenceFailure"
+        const val PREFERENCE_FAILURE_FROM = "io.github.sahsenvar.kmemory.listener.from"
         const val FLOW = "kotlinx.coroutines.flow.Flow"
         const val FLOW_BUILDER = "kotlinx.coroutines.flow.flow"
         const val FLOW_CATCH = "kotlinx.coroutines.flow.catch"
