@@ -76,16 +76,8 @@ internal class GenerateImplementationUseCase(
                     appendLine()
                 }
             }
-            if (needsJson) {
-                appendLine(serializingFunction())
-                appendLine()
-            }
-            appendLine(reportFunction(needsJson))
+            appendLine(reportFunction())
             appendLine()
-            if (needsJson) {
-                appendLine(boundaryMarkerClass())
-                appendLine()
-            }
             appendLine(companionObject(storeName, models))
             appendLine("}")
             appendLine()
@@ -107,81 +99,32 @@ internal class GenerateImplementationUseCase(
     }
 
     /**
-     * Tum hata yollarinin gectigi TEK raporlama noktasi.
+     * Tum hata yollarinin gectigi TEK raporlama noktasi (tasarim §8).
      *
-     * Dogrudan `listener.onError(STORE_NAME, key, error)` cagirmak tasarim §8'deki
-     * "dinleyici degerleri asla gormez" sozlesmesini ihlal ediyordu: serilestirme sinirindan
-     * cikan hatalar bozuk ya da gecersiz girdiyi mesajlarina gomer, yani bir Crashlytics
-     * dinleyicisi saklanan PIN'i ya da token'i disari tasirdi.
+     * Dinleyici HICBIR ZAMAN yabanci bir `Throwable` almaz: okuma, yazma, silme ve `eraseAll`
+     * dallarinin hepsi buradan gecer ve hepsi
+     * [io.github.sahsenvar.kmemory.listener.PreferenceFailure] verir.
      *
-     * Kapi hatanin TIPINE degil ciktigi KONUMA bakar (bkz.
-     * [io.github.sahsenvar.kmemory.listener.PreferenceSerializationException]): yalnizca
-     * [serializingFunction]'in sardigi `encode`/`decode` cagrilari `SerializationFailure`
-     * isareti tasir ve sanitize edilir. DataStore G/C hatalari bu isareti tasimadigi icin
-     * oldugu gibi raporlanir — deger tasimazlar, tani icin gereklidirler.
+     * ## Konum kapisi neden kaldirildi
+     * Onceki devirde yalnizca `encode`/`decode` cagrilarinin ETRAFINDAN cikan hatalar sanitize
+     * ediliyor, DataStore'un kendi hatalari "deger tasimaz" varsayimiyla ham geciriliyordu.
+     * Varsayim yanlisti: `Preferences.toString()` store'un TUM anahtar=deger ciftlerini basar,
+     * yani mesajinda bir anlik goruntu tasiyan herhangi bir DataStore istisnasi saklanan degeri
+     * dinleyiciye — dolayisiyla Crashlytics'e — tasiyordu. Sizintinin kaynagi hatanin nereden
+     * ciktigi degil, ona bagli SERBEST METNIN dinleyiciye ulasmasidir; bu yuzden kapi konumdan
+     * cikarilip buraya, tek bir noktaya tasindi. Tahmin eden her kapi bir devir sonra yanlis
+     * cikti: once `error is SerializationException` (dogrulayici `init` hatalarini kaciriyordu),
+     * sonra konum (DataStore hatalarini kaciriyordu). Simdi tahmin yok.
      *
-     * Fonksiyon `Unit` degil `Throwable` DONER: cagri yerleri `throw report(key, error)`
-     * yazar. Boylece isaret sarmalayicisi cagirana asla ulasmaz, cagiran hala ORIJINAL
-     * hatayi alir — yani sanitizasyon yalnizca dinleyici yolunu degistirir.
-     *
-     * @param needsJson Arayuzde serilestirilecek bir tip var mi; yoksa sinir hic uretilmez ve
-     *   isaret kontrolu olu koda donusurdu.
+     * Fonksiyon `Unit` degil `Throwable` DONER: cagri yerleri `throw report(key, error)` yazar.
+     * Boylece cagiran ORIJINAL hatayi tipi ve mesajiyla almaya devam eder — sanitizasyon
+     * yalnizca dinleyici yolunu degistirir, tani bolunur ama kaybolmaz.
      */
-    private fun reportFunction(needsJson: Boolean): String {
-        if (!needsJson) {
-            return """
-                |    private fun report(key: String?, error: Throwable): Throwable {
-                |        listener.onError(STORE_NAME, key, error)
-                |        return error
-                |    }
-            """.trimMargin()
-        }
-
-        return """
-            |    private fun report(key: String?, error: Throwable): Throwable {
-            |        if (error !is SerializationFailure) {
-            |            listener.onError(STORE_NAME, key, error)
-            |            return error
-            |        }
-            |        listener.onError(
-            |            STORE_NAME,
-            |            error.key,
-            |            PreferenceSerializationException.atBoundary(STORE_NAME, error.key, error.original),
-            |        )
-            |        return error.original
-            |    }
-        """.trimMargin()
-    }
-
-    /**
-     * Serilestirme SINIRI: `encode`/`decode` cagrilarinin etrafina sarilan tek kapi.
-     *
-     * Blok icinden cikan her hata — tipi ne olursa olsun — konum bilgisi tasiyan bir
-     * [boundaryMarkerClass] ornegine cevrilir. Kapi burada oldugu icin `report` "bu hata
-     * serilestirmeden mi geldi" sorusunu tahmin etmek zorunda kalmaz; upstream'in
-     * `error is SerializationException` tahmini tam da bu yuzden yanlisti.
-     */
-    private fun serializingFunction(): String = """
-        |    private fun <T> serializing(key: String, block: () -> T): T =
-        |        try {
-        |            block()
-        |        } catch (error: Throwable) {
-        |            throw SerializationFailure(key, error)
-        |        }
-    """.trimMargin()
-
-    /**
-     * Sinif-ici isaret tipi; `report` disinda kimse gormez.
-     *
-     * Orijinal hata `cause` OLARAK DEGIL ayri bir ozellik olarak tutulur: `cause` zinciri
-     * `stackTraceToString()` ile basilir, yani isaret yanlislikla disari sizsa bile degeri
-     * yaninda goturmez. Mesaji da yoktur.
-     */
-    private fun boundaryMarkerClass(): String = """
-        |    private class SerializationFailure(
-        |        val key: String,
-        |        val original: Throwable,
-        |    ) : RuntimeException()
+    private fun reportFunction(): String = """
+        |    private fun report(key: String?, error: Throwable): Throwable {
+        |        listener.onError(STORE_NAME, key, PreferenceFailure.from(STORE_NAME, key, error))
+        |        return error
+        |    }
     """.trimMargin()
 
     /** `@Preferences`'in `name` argumani; uretilen `STORE_NAME` sabitine literal gomulur. */

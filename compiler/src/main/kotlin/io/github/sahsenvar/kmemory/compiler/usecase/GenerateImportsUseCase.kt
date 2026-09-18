@@ -53,11 +53,10 @@ internal class GenerateImportsUseCase {
             if (mutates) add(EDIT)
             models.map { it.type.keyFactory }.distinct().sorted().forEach { add("$PREFERENCES_CORE.$it") }
             add(KMEMORY)
+            // Kosulsuz: uretilen `report()` hangi erisim olursa olsun dinleyiciye daima bir
+            // PreferenceFailure verir, yani salt-ilkel bir arayuzde de kullanilir.
+            add(PREFERENCE_FAILURE)
             add(PREFERENCE_LISTENER)
-            // Sanitize eden sarmalayici YALNIZCA serilestirme siniri varsa uretilir;
-            // salt-ilkel bir arayuzde `report()` hatayi oldugu gibi gecirir ve bu import
-            // kullanilmadan kalirdi.
-            if (needsJson) add(PREFERENCE_SERIALIZATION_EXCEPTION)
             if (anyFlowReturn) {
                 add(FLOW)
                 add(FLOW_CATCH)
@@ -95,8 +94,7 @@ internal class GenerateImportsUseCase {
         const val EDIT = "$PREFERENCES_CORE.edit"
         const val KMEMORY = "io.github.sahsenvar.kmemory.KMemory"
         const val PREFERENCE_LISTENER = "io.github.sahsenvar.kmemory.listener.PreferenceListener"
-        const val PREFERENCE_SERIALIZATION_EXCEPTION =
-            "io.github.sahsenvar.kmemory.listener.PreferenceSerializationException"
+        const val PREFERENCE_FAILURE = "io.github.sahsenvar.kmemory.listener.PreferenceFailure"
         const val FLOW = "kotlinx.coroutines.flow.Flow"
         const val FLOW_BUILDER = "kotlinx.coroutines.flow.flow"
         const val FLOW_CATCH = "kotlinx.coroutines.flow.catch"

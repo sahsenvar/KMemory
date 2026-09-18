@@ -49,16 +49,22 @@ Ek notlar:
 - Üretilen `fun KMemory.<arayüzAdı>()` uzantısının görünürlüğü arayüzünkini izler: `internal`
   arayüz `internal` uzantı üretir (önceden koşulsuz `public`'ti ve `EXPOSED_FUNCTION_RETURN_TYPE`
   ile derlenmiyordu)
-- Serileştirme hataları `PreferenceListener.onError`'a ham hâlde değil, mesaj taşımayan yeni
-  `PreferenceSerializationException` (store + key + orijinalin sınıf adı, `cause` YOK) olarak
-  gider: kotlinx-serialization bozuk girdiyi hata mesajına gömdüğü için ham hata "dinleyici
-  değerleri asla görmez" sözleşmesini ihlal ediyordu. Çağırana fırlatılan hata değişmedi
-- Sanitizasyon kapısı hatanın **tipine değil çıktığı konuma** bağlı: üretilen kod `encode`/`decode`
-  çağrısının etrafını sarar ve o sınırdan çıkan her `Throwable` sarmalanır. Tip kapısı
-  (`error is SerializationException`) `init { require(...) }` gibi doğrulayıcı deyimlerin
-  `IllegalArgumentException`'ını kaçırıyordu — kotlinx onu sarmalamaz, mesajı saklanan değeri
-  taşır ve olduğu gibi dinleyiciye giderdi. DataStore G/Ç hataları sınırın dışında oluştuğu için
-  sanitize **edilmez**; çağırana fırlatılan hata yine değişmedi
+- `PreferenceListener.onError` **daima** yeni `PreferenceFailure`'ı alır (store + key +
+  orijinalin sınıf adı + orijinalin kopyalanmış yığın izi; mesaj, `cause` ve `suppressed` YOK).
+  Dinleyici hiçbir dalda yabancı bir `Throwable` görmez; çağırana fırlatılan hata değişmedi —
+  hâlâ orijinal tip ve mesaj
+- Sanitizasyon kapısı **kaldırıldı**: filtre yok, istisnasız her okuma/yazma/silme/`eraseAll`
+  dalı tek bir merkezî `report` noktasından geçiyor. İki devir boyunca denenen tahminlerin ikisi
+  de yanlış çıkmıştı — tip kapısı (`error is SerializationException`) doğrulayıcı
+  `init { require(...) }` deyimlerinin `IllegalArgumentException`'ını kaçırıyordu; konum kapısı
+  (`encode`/`decode` çağrısının etrafı) ise DataStore'un kendi hatalarını kaçırıyordu.
+  `Preferences.toString()` store'un tüm anahtar=değer çiftlerini bastığı için, mesajında bir
+  anlık görüntü taşıyan herhangi bir DataStore istisnası saklanan değeri dinleyiciye taşıyordu
+- `PreferenceSerializationException` **kaldırıldı**; yerini `PreferenceFailure` aldı (iki paralel
+  mekanizma bırakılmadı). Serileştirme hatası artık ayrı bir tip değil, yalnızca farklı bir
+  `originalType` değeridir. `failureType` (yalın sınıf adı) yerine `originalType` (tam nitelikli
+  ad) geldi; tip `commonMain`'den JVM + Android kaynak kümesine taşındı, çünkü yığın izi
+  kopyalamak `Throwable.stackTrace` gerektirir
 - `kmemory { }` eksik `storeFactory`'yi **kurulum anında** net mesajlı bir
   `IllegalStateException` ile reddeder; önceden `lateinit` erişimi
   `UninitializedPropertyAccessException` fırlatıyordu

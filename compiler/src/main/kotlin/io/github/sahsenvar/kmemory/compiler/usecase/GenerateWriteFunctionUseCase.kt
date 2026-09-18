@@ -11,9 +11,8 @@ import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
  * Upstream'in `GenerateSetFunctionUseCase`'inin yerini alir. Iki fark var:
  * - Yazma basarili olunca [io.github.sahsenvar.kmemory.listener.PreferenceListener.onWrite]
  *   cagrilir; upstream'de hicbir kanca yoktu.
- * - Hata yutulmaz: `throw report(key, error)` ile once raporlanir (serilestirme hatalarinin
- *   mesaji saklanan degeri icerdigi icin dinleyiciye mesajsiz sarmalayici gider), sonra AYNI
- *   hata cagirana firlatilir.
+ * - Hata yutulmaz: `throw report(key, error)` ile once raporlanir (dinleyiciye daima degersiz
+ *   bir `PreferenceFailure` gider), sonra AYNI hata cagirana firlatilir.
  *   Upstream `dataStore.edit`'i ciplak birakiyordu, yani disk hatasi cagrildigi yere
  *   ham sekilde sizip hangi anahtarda oldugu bilgisini kaybediyordu.
  *
@@ -74,10 +73,8 @@ internal class GenerateWriteFunctionUseCase {
      * olan "null'i yok say" cagirani sessizce yaniltirdi, cunku `readX()` eski degeri
      * dondurmeye devam ederdi.
      *
-     * Serilestirme `dataStore.edit`'in DISINA alinir. Iki gerekcesi var: `edit`'in donusumu
-     * yeniden kosulabilir, ve iceride firlatilan bir hatanin DataStore tarafindan sarmalanip
-     * sarmalanmadigina guvenmek gerekmez — sanitizasyon kapisi (`serializing`) o zaman
-     * hatayi taniyamaz ve saklanan deger dinleyiciye sizardi.
+     * Serilestirme `dataStore.edit`'in DISINA alinir: `edit`'in donusumu yeniden kosulabilir,
+     * yani iceride yapilsaydi ayni deger birden fazla kez kodlanirdi.
      *
      * @param indent Blogun ilk satirinin onune yazilacak girinti; iki donus sekli farkli
      *   derinlikte oldugu icin disaridan verilir.
@@ -108,13 +105,12 @@ internal class GenerateWriteFunctionUseCase {
      *
      * [PreferenceType.OBJECT] diskte JSON metni olarak durur; okuma tarafindaki
      * `json.decodeFromString` ile simetriktir — biri degisirse digeri de degismek zorundadir,
-     * bu yuzden iki ifade de tek bir tip ayrimindan turetilir. Okuma tarafi gibi burasi da
-     * `serializing(key) { }` ile sarilir: sanitizasyon kapisi serilestirmenin OLDUGU yerdedir.
+     * bu yuzden iki ifade de tek bir tip ayrimindan turetilir.
      */
     private fun storedExpression(model: PreferenceModel): String =
         when (model.type) {
             PreferenceType.OBJECT ->
-                "serializing(${model.keyNameProperty}) { json.encodeToString(value) }"
+                "json.encodeToString(value)"
 
             else -> "value"
         }
@@ -123,7 +119,7 @@ internal class GenerateWriteFunctionUseCase {
     private fun nullableStoredExpression(model: PreferenceModel): String =
         when (model.type) {
             PreferenceType.OBJECT ->
-                "value?.let { raw -> serializing(${model.keyNameProperty}) { json.encodeToString(raw) } }"
+                "value?.let { raw -> json.encodeToString(raw) }"
 
             else -> "value"
         }

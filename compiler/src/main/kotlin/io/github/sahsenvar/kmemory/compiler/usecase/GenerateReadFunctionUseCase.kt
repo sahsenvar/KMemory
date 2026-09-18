@@ -20,15 +20,11 @@ import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
  * ile "disk okunamadi" durumlarini ayirt edemezdi; ikisi de `null` gorunurdu.
  *
  * Bildirim `listener.onError` ile DOGRUDAN degil, uretilen `report(key, error)` yardimcisi
- * uzerinden yapilir: cozme hatasinin mesaji saklanan degeri icerir ve dinleyiciye mesajsiz
- * sarmalayici gitmek zorundadir (tasarim §8). `report` firlatilacak hatayi DONDURUR, bu
- * yuzden cagri sekli `throw report(...)`'dir.
- *
- * Cozme cagrisi ayrica `serializing(key) { }` ile sarilir. Sanitizasyon kapisi hatanin
- * TIPINE degil ciktigi KONUMA baglidir: `init { require(...) }` tasiyan bir model cozulurken
- * `IllegalArgumentException` firlatir ve kotlinx bunu sarmalamaz, yani tip kapisi o yolu
- * kacirirdi. Diskten okuma (`dataStore.data`) sarmanin DISINDADIR; G/C hatalari deger
- * tasimaz ve sanitize edilmemelidir.
+ * uzerinden yapilir: dinleyici hicbir dalda yabanci bir `Throwable` gormemelidir (tasarim §8).
+ * Hangi hatanin tehlikeli oldugunu tahmin eden bir kapi YOKTUR — ne tipe ne konuma bakilir,
+ * cunku hem cozme hatasinin hem de `Preferences` anlik goruntusu tasiyan bir DataStore
+ * hatasinin mesaji saklanan degeri icerebilir. `report` firlatilacak hatayi DONDURUR, bu
+ * yuzden cagri sekli `throw report(...)`'dir ve cagiran orijinal hatayi almaya devam eder.
  */
 internal class GenerateReadFunctionUseCase {
 
@@ -119,10 +115,9 @@ internal class GenerateReadFunctionUseCase {
      * alinabilirdi ama ifade zaten o tipte oldugu icin `USELESS_CAST` uyarisi dogar; uyariyi
      * hataya ceviren tuketicilerde uretilen kod derlenmezdi.)
      *
-     * Sonucta olusan [ClassCastException] SANITIZE EDILMEZ: mesaji yalnizca sinif adlarini
-     * tasir, saklanan degeri tasimaz — ve gercek bir veri bozulmasi isareti oldugu icin
-     * dinleyicinin tam da gormesi gereken seydir. Bu yuzden baglama `serializing(key) { }`
-     * sinirinin DISINDADIR.
+     * Sonucta olusan [ClassCastException] akisin/`try`'in ICINDE dogar, yani `report`'tan
+     * gecer ve dinleyici bunu `originalType = "java.lang.ClassCastException"` olarak gorur.
+     * Gercek bir veri bozulmasi isaretidir; kaybolmamasi gereken tani tam olarak budur.
      *
      * @param type Fonksiyonun bildirdigi deger tipi, or. `Int?` ya da `List<String>?`.
      * @param expression Degeri ureten ifade.
@@ -139,16 +134,13 @@ internal class GenerateReadFunctionUseCase {
      * [PreferenceType.OBJECT] diskte JSON metni olarak durdugu icin once metin okunur, sonra
      * cozulur; `?.let` sayesinde anahtar yoksa cozme hic denenmez ve `null` doner.
      *
-     * Cozme `serializing(key) { }` icindedir — sanitizasyon sinirini ciziyor. `let`
-     * parametresi `raw` diye ADLANDIRILIR: ic blok da lambda oldugu icin adsiz birakilan
-     * `it` okuyani yaniltirdi; ayrica [typedBinding]'in urettigi `stored` yerelini
-     * golgelememesi gerekir.
+     * `let` parametresi `raw` diye ADLANDIRILIR: adsiz birakilan `it` okuyani yaniltirdi;
+     * ayrica [typedBinding]'in urettigi `stored` yerelini golgelememesi gerekir.
      */
     private fun readExpression(model: PreferenceModel, decodeType: String): String =
         when (model.type) {
             PreferenceType.OBJECT ->
-                "prefs[${model.keyProperty}]?.let { raw -> " +
-                    "serializing(${model.keyNameProperty}) { json.decodeFromString<$decodeType>(raw) } }"
+                "prefs[${model.keyProperty}]?.let { raw -> json.decodeFromString<$decodeType>(raw) }"
 
             else -> "prefs[${model.keyProperty}]"
         }

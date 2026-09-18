@@ -266,52 +266,63 @@ interface PreferenceListener {
 }
 ```
 
-**Dinleyici değerleri asla görmez** — yalnızca store adı ve anahtar. Aksi halde bir hata ayıklama
-günlükçüsü PIN'i veya oturum token'ını logcat'e düşürürdü.
+**Dinleyici değerleri asla görmez** — yalnızca store adı, anahtar ve hatanın tipi. Aksi halde bir
+hata ayıklama günlükçüsü PIN'i veya oturum token'ını logcat'e düşürürdü.
 
 Hatalar yutulmaz: okuma akışında `.catch { throw report(…) }`, yazma/silmede
 `try/catch` → raporla → aynı hatayı fırlat. Üretilen sınıfta parametrenin varsayılanı
 `PreferenceListener.None`'dır, yani vermek zorunda değilsin.
 
-#### `PreferenceSerializationException`
+#### `PreferenceFailure`
 
-Değer gizliliği `onError`'a verilen **hatanın içinde** de korunur. Serileştirme sınırından çıkan
-hatalar bozuk ya da geçersiz girdiyi mesajlarına gömer:
+`onError`'a giden `error` **daima** bir `PreferenceFailure`'dır; üretilen kod dinleyiciye hiçbir
+dalda yabancı bir `Throwable` geçirmez.
+
+```kotlin
+class PreferenceFailure(
+    val store: String,         // hangi DataStore dosyası
+    val key: String?,          // hangi anahtar (null → store ölçeği)
+    val originalType: String,  // orijinal hatanın sınıf adı, örn. "java.io.IOException"
+) : RuntimeException("<store>/<key> basarisiz: <originalType>") {
+    companion object {
+        fun from(store: String, key: String?, error: Throwable): PreferenceFailure
+    }
+}
+```
+
+**Neden bir sarmalayıcı gerekiyor.** Hataya bağlı serbest metin saklanan değeri taşıyabilir.
+En bilinen kaynak serileştirmedir:
 
 ```text
 Unexpected JSON token at offset 41: ... JSON input: {"pin":"1234","token":"ey..."}
 java.lang.IllegalArgumentException: geçersiz pin: 1234
 ```
 
-Ham hata dinleyiciye verilseydi bu mesaj Crashlytics'e düşerdi. Üretilen kod bu yüzden
-`encode`/`decode` çağrısının **etrafını** sarar ve o sınırdan çıkan her hatayı — tipi ne olursa
-olsun — mesaj taşımayan bir sarmalayıcıya çevirir:
+…ama tek kaynak o değildir: `androidx.datastore.preferences.core.Preferences.toString()` store'un
+**tüm anahtar=değer çiftlerini** basar, yani mesajında bir anlık görüntü taşıyan herhangi bir
+DataStore istisnası aynı sızıntıyı üretir:
 
-```kotlin
-class PreferenceSerializationException : RuntimeException {
-    val store: String        // hangi DataStore dosyası
-    val key: String?         // hangi anahtar (null → store ölçeği)
-    val failureType: String  // orijinal hatanın sınıf adı, örn. "JsonDecodingException"
-}
+```text
+java.lang.IllegalStateException: tercih doğrulaması başarısız: { 3f1c…0003 = SONDA-SIR-1001 }
 ```
 
-- Orijinal hata **`cause` olarak tutulmaz**: `stackTraceToString()` ve çoğu günlükleme altyapısı
-  cause zincirini de basar, yani cause tutulsaydı değer aynı yoldan yine dışarı çıkardı. Kalan
-  tanı bilgisi `failureType`'tır.
+- **Ne taşınır:** `store`, `key`, `originalType` ve orijinalin **kopyalanmış yığın izi**. Bir sınıf
+  adı ve bir kare listesi tanım gereği saklanan veriyi taşıyamaz, yani tanı korunur.
+- **Ne taşınmaz:** orijinalin **mesajı**, **`cause`**'u ve **`suppressed`** zinciri. Üçü de serbest
+  metindir ve `stackTraceToString()` hepsini basar — biri tutulsaydı sızıntı aynı yoldan geri
+  gelirdi.
 - **Çağırana fırlatılan hata değişmez**: sarmalayıcı yalnızca dinleyiciye gider, `readX()` /
-  `writeX()` çağıranı orijinal `SerializationException`'ı almaya devam eder. Çağıran zaten değere
-  erişebilen koddur; orada gizlilik kaybı yoktur ve tam tanı korunur.
-- Serileştirme sınırının **dışında** oluşan hatalar (disk G/Ç, bozuk dosya, iptal) **olduğu gibi**
-  geçer; değer taşımadıkları için mesajlarını silmek tanılamayı bedelsiz yere körleştirirdi.
-- Kapı hatanın **tipine değil çıktığı konuma** bakar. `error is SerializationException` yetmez:
-  Kotlin'in en yaygın doğrulama deyimi
-
-  ```kotlin
-  @Serializable data class Pin(val value: String) { init { require(value.length > 40) { "geçersiz pin: $value" } } }
-  ```
-
-  çözme sırasında `IllegalArgumentException` fırlatır ve kotlinx-serialization bunu **sarmalamaz** —
-  yani tip kapısından geçer ve saklanan PIN'i yanında götürürdü.
+  `writeX()` çağıranı orijinali **tipi ve mesajıyla** almaya devam eder. Çağıran zaten değere
+  erişebilen koddur; orada gizlilik kaybı yoktur.
+- **Kapı yok, tahmin yok.** "Hangi hata tehlikeli" sorusunu tahmin eden her filtre bir devir sonra
+  yanlış çıktı: önce tip kapısı (`error is SerializationException`) — Kotlin'in en yaygın doğrulama
+  deyimi olan `init { require(…) }` `IllegalArgumentException` fırlatır ve kotlinx bunu sarmalamaz,
+  yani kapıdan geçerdi; sonra konum kapısı (`encode`/`decode` çağrısının etrafı) — DataStore'un
+  kendi hatalarını kaçırırdı. Artık tek bir merkezî `report` noktası var ve istisnasız her dal
+  oradan geçiyor.
+- `PreferenceFailure`, yığın izi kopyalamak için `Throwable.stackTrace`'e ihtiyaç duyduğundan
+  `KMemory` ile aynı **JVM + Android** kaynak kümesindedir; `PreferenceListener` `commonMain`'de
+  kalır ve bu yüzden `onError`'ın parametre tipi `Throwable` olarak durur.
 
 ---
 

@@ -8,7 +8,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.sahsenvar.kmemory.kmemory
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
-import io.github.sahsenvar.kmemory.listener.PreferenceSerializationException
+import io.github.sahsenvar.kmemory.listener.PreferenceFailure
 import io.github.sahsenvar.kmemory.sample.model.SearchHistorySample
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -190,9 +190,12 @@ class SamplePreferencesTest {
                 "dinleyiciye giden hata saklanan degeri tasiyor: $metin",
             )
             // Sarmalayici tanisiz olmamali: hangi depo, hangi anahtar, hangi hata sinifi.
-            val sarmalayici = assertIs<PreferenceSerializationException>(error)
+            val sarmalayici = assertIs<PreferenceFailure>(error)
             assertEquals(KEY_PROFILE, sarmalayici.key)
-            assertEquals("JsonDecodingException", sarmalayici.failureType)
+            assertTrue(
+                sarmalayici.originalType.endsWith("JsonDecodingException"),
+                "tani tipi korunmali: ${sarmalayici.originalType}",
+            )
             assertNull(sarmalayici.cause, "cause tutulursa mesaj zincir uzerinden yine okunur")
         }
     }
@@ -235,23 +238,23 @@ class SamplePreferencesTest {
                 metin.contains(PIN_SIZINTI_KANITI),
                 "dinleyiciye giden hata saklanan PIN'i tasiyor: $metin",
             )
-            val sarmalayici = assertIs<PreferenceSerializationException>(error)
+            val sarmalayici = assertIs<PreferenceFailure>(error)
             assertEquals(KEY_PIN, sarmalayici.key)
-            assertEquals("IllegalArgumentException", sarmalayici.failureType)
+            assertEquals("java.lang.IllegalArgumentException", sarmalayici.originalType)
             assertNull(sarmalayici.cause, "cause tutulursa mesaj zincir uzerinden yine okunur")
         }
     }
 
     /**
-     * Kapinin OTEKI yarisi: serilestirme SINIRININ DISINDA olusan hata sanitize EDILMEZ.
+     * DataStore G/C hatasi da sanitize EDILIR — bu, konum kapisindan donulen yerdir.
      *
-     * Konum kapisi "her hatayi sarmala"ya kaysaydi disk hatalarinin mesaji da silinir ve tani
-     * bedelsiz yere korlesirdi. DataStore G/C hatasi saklanan degeri tasimaz; dinleyiciye
-     * oldugu gibi gitmeli. Test bunu bilerek SERILESTIRILEN bir anahtar uzerinde kosar —
-     * yani kapinin "anahtar nesne mi" degil "hata nereden cikti" sorusuna baktigini gosterir.
+     * Onceki devir "disk hatasi deger tasimaz" diye bu yolu ham gecirirdi. Varsayim yanlisti:
+     * `Preferences.toString()` store'un tum anahtar=deger ciftlerini basar, yani mesajinda bir
+     * anlik goruntu tasiyan bir DataStore istisnasi saklanan degeri disari cikarir. Tani
+     * kaybolmaz, BOLUNUR: dinleyici tip + yigin izi alir, cagiran tam mesaji alir.
      */
     @Test
-    fun `disk hatasi sanitize edilmez ve tani mesajiyla raporlanir`() = runTest {
+    fun `disk hatasi da sanitize edilir ama cagiranin mesaji korunur`() = runTest {
         val raporlanan = mutableListOf<Throwable>()
         val listener = object : PreferenceListener {
             override fun onError(store: String, key: String?, error: Throwable) {
@@ -260,12 +263,16 @@ class SamplePreferencesTest {
         }
         val p = SamplePreferencesImpl(OkumasiPatlayanStore, Json, listener)
 
-        assertFailsWith<IOException> { p.readProfile().first() }
-        assertFailsWith<IOException> { p.readProfileOnce() }
+        assertEquals(DISK_HATASI, assertFailsWith<IOException> { p.readProfile().first() }.message)
+        assertEquals(DISK_HATASI, assertFailsWith<IOException> { p.readProfileOnce() }.message)
 
         assertEquals(2, raporlanan.size, "her iki okuma sekli de raporlamali")
         raporlanan.forEach { error ->
-            assertEquals(DISK_HATASI, assertIs<IOException>(error).message, "tani mesaji korunmali")
+            assertFalse(
+                error.stackTraceToString().contains(DISK_HATASI),
+                "dinleyiciye giden hata orijinal mesaji tasimamali",
+            )
+            assertEquals("java.io.IOException", assertIs<PreferenceFailure>(error).originalType)
         }
     }
 
@@ -278,9 +285,8 @@ class SamplePreferencesTest {
      * [ClassCastException] gercek bir veri bozulmasi isaretidir ve tam olarak dinleyicinin
      * gormesi gereken seydir.
      *
-     * Bu bir GIZLILIK sorunu DEGILDIR: [ClassCastException] mesaji yalnizca sinif adlarini
-     * tasir, saklanan degeri tasimaz. Dolayisiyla hata sanitize EDILMEMELI, dinleyiciye
-     * oldugu gibi gitmelidir — testin `assertIs<ClassCastException>` beklemesi bunu sabitler.
+     * Dinleyiciye — her dalda oldugu gibi — degersiz bir sarmalayici gider; tani
+     * `originalType` ile korunur. Onemli olan dinleyicinin bu olaydan HABERDAR OLMASIDIR.
      *
      * Ilk kosuda dinleyici HIC cagrilmiyordu: `.map { prefs -> prefs[KEY] }` lambda'sinin
      * silinmis donus tipi `Object` oldugu icin `checkcast` akisin DISINDA, `.catch`'in
@@ -306,8 +312,11 @@ class SamplePreferencesTest {
 
         assertEquals(2, raporlanan.size, "her iki okuma sekli de raporlamali")
         raporlanan.forEach { error ->
-            // Sanitize EDILMEMELI: sinif adlari deger tasimaz, tani icin gereklidirler.
-            assertIs<ClassCastException>(error)
+            assertEquals(
+                "java.lang.ClassCastException",
+                assertIs<PreferenceFailure>(error).originalType,
+                "tani tipi korunmali",
+            )
         }
     }
 
