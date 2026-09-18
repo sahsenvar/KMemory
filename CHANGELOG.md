@@ -27,8 +27,11 @@ KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-a
 - `List` / `Set` / `Map` / `Collection` / `Array` / `Pair` / `Triple` kapsayıcıları desteklenir;
   JSON metnine düşerler
 - Nullable `@Write` parametresine `null` yazmak anahtarı siler
-- Üretilen anahtar sabitlerinin adları çarpışmaz; uzun ortak önekli iki anahtar (örn.
-  `notification_settings_enabled` / `notification_settings_muted`) artık aynı sabite inmiyor
+- Üretilen anahtar sabitlerinin adı **accessor adından** türer (`readProfile` → `KEY_PROFILE`),
+  anahtarın metninden değil; UUID anahtarlarda eski biçim (`KEY_8B1D2C44000140008000_0`) üretilen
+  kodu ve stacktrace'i okunamaz kılıyordu. Ad türetilemezse anahtarın ilk 20 alfanümeriği + grup
+  indeksine düşülür. Adlar çarpışmaz: aynı tabanı üreten gruplara indeks eklenir, çarpışmayanlar
+  indekssiz kalır
 - `Result<T>` sarmalaması desteklenmiyor; `@Write`'ta `Flow<Int>` gibi `Unit` taşımayan bir
   `Flow` de reddedilir
 - Üretilen sınıf `Context` yerine `DataStore<Preferences>` alır

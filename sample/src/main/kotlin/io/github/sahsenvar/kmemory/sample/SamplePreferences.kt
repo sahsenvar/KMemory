@@ -95,8 +95,10 @@ interface SamplePreferences {
     @Write(KEY_TOKEN)
     suspend fun writeToken(value: String?)
 
-    // Asagidaki iki anahtarin alfanumerikleri ilk 20 karakterde AYNI; uretilen sabit adlari
-    // yalnizca bu onekten turerse companion'da "Conflicting declarations" olusur.
+    // Asagidaki iki anahtarin alfanumerikleri ilk 20 karakterde AYNI. Sabit adi ANAHTARIN
+    // metninden turetilseydi ikisi de ayni ada inip companion'da "Conflicting declarations"
+    // uretirdi; ad accessor adindan turedigi icin KEY_NOTIFICATION_ENABLED ve
+    // KEY_NOTIFICATION_MUTED olurlar ve indekse hic ihtiyac duyulmaz.
     @Read(KEY_NOTIFICATION_ENABLED)
     fun readNotificationEnabled(): Flow<Boolean?>
 

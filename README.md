@@ -156,6 +156,35 @@ anotasyon için de aynıdır; "`@Write` daima suspend'dir" gibi accessor bazlı 
 
 ---
 
+## Üretilen sabit adları accessor adından türer
+
+Anahtarın kendisi bir UUID olabilir; üretilen sabitin **adı** ondan türemez. Ad, o anahtarı
+paylaşan grubun **ilk bildirilen** fonksiyonunun adından üretilir:
+
+```kotlin
+@Read(KEY_PROFILE)  fun readProfile(): Flow<Profile?>      // KEY_PROFILE / KEY_NAME_PROFILE
+@Write(KEY_PROFILE) fun writeProfile(value: Profile): Flow<Unit>
+@Erase(KEY_PROFILE) fun eraseProfile(): Flow<Unit>
+```
+
+Kural:
+
+1. Grubun ilk fonksiyonunun adı alınır.
+2. Baştaki erişim öneki kelime sınırında, büyük/küçük harf duyarsız soyulur:
+   `read` · `write` · `erase` · `get` · `set` · `put` · `delete` · `clear`.
+3. Kalan `UPPER_SNAKE_CASE`'e çevrilir — `readPinCode` → `PIN_CODE`,
+   `writeSearchHistory` → `SEARCH_HISTORY`.
+4. Kalan boşsa (`fun read()`) ya da ASCII tanımlayıcı eki değilse, anahtarın ilk 20
+   alfanümeriği + grup indeksi kullanılır (`KEY_NAME_K_0`).
+5. İki grup aynı tabanı üretirse **çarpışan tüm gruplara** grup indeksi eklenir
+   (`KEY_PROFILE_0` / `KEY_PROFILE_1`); çarpışmayanlar indekssiz kalır.
+
+Değişen yalnızca **tanımlayıcı adı**dır: anahtarın kendisi `KEY_NAME_X = "<uuid>"` literalinde
+olduğu gibi kalır ve `const` sabitler derleme zamanında inline edildiği için APK'da görünmez —
+bu bir güvenlik değişikliği değil, üretilen kodun ve stacktrace'in okunabilirliğidir.
+
+---
+
 ## Varsayılan değer kavramı yoktur
 
 Hiçbir anotasyonda `defaultValue` bulunmaz ve **her okuma nullable'dır**. Anahtar hiç yazılmamışsa
@@ -399,9 +428,6 @@ gerektiğinde atomicfu kararı orada verilecek.
 
 - **Şifreleme yok.** `@Encrypted` / `PreferenceCipher` 0.1.0 kapsamı dışındadır.
 - **Adaptör seam'i uçtan uca değil** (yukarıda).
-- **Anahtar sabiti adı çakışabilir.** Üretilen companion sabiti, anahtarın alfanümerik
-  karakterlerinin ilk 20'sinden türetilir; aynı 20 karakterlik önekle başlayan iki anahtar aynı
-  sabit adını üretir ve tüketici modülde "conflicting declarations" hatası verir.
 - **Maven Central'a yayınlanmadı.** 0.1.0 yalnızca `publishToMavenLocal` ile tüketilir.
 
 ---

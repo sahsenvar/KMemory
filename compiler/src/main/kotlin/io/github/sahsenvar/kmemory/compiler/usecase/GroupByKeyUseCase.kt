@@ -11,31 +11,38 @@ import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
  * [PreferenceType.OBJECT] + `null` tip ile doner; bunu hataya cevirmek
  * [ValidateInterfaceUseCase]'in isidir.
  *
- * Gruba verilen indeks uretilen sabit adlarinin carpismasini onler (bkz.
- * [PreferenceModel.keyProperty]); bu yuzden `groupBy`'in koruduğu BILDIRIM sirasina dayanir.
+ * Uretilen sabit adlari [DeriveConstantSuffixUseCase] tarafindan TOPLUCA turetilir (carpisma
+ * kurali butun gruplari birlikte gormeyi gerektirir); bu yuzden `groupBy`'in koruduğu BILDIRIM
+ * sirasina dayanir.
  */
-internal class GroupByKeyUseCase {
+internal class GroupByKeyUseCase(
+    private val deriveConstantSuffixUseCase: DeriveConstantSuffixUseCase,
+) {
 
-    operator fun invoke(functions: List<FunctionModel>): List<PreferenceModel> =
-        functions
+    operator fun invoke(functions: List<FunctionModel>): List<PreferenceModel> {
+        val groups = functions
             .filter { it.key != null }
             .groupBy { checkNotNull(it.key) }
-            .entries
-            .mapIndexed { index, entry ->
-                // Ayni anahtarda celisen tip bildirimi dogrulamada yakalanir; burada ilk
-                // tipli fonksiyon belirleyicidir.
-                val declaredType = entry.value.firstNotNullOfOrNull { it.declaredType }
-                // Tip argumani tasiyan hicbir tip DataStore ilkeli olamaz; JSON'a duser.
-                val primitive = declaredType
-                    ?.takeUnless { it.hasArguments }
-                    ?.let { PreferenceType.fromQualifiedName(it.rootFqName) }
+            .map { (key, grouped) -> key to grouped }
 
-                PreferenceModel(
-                    index = index,
-                    key = entry.key,
-                    type = primitive ?: PreferenceType.OBJECT,
-                    declaredType = declaredType,
-                    functions = entry.value,
-                )
-            }
+        val suffixes = deriveConstantSuffixUseCase(groups)
+
+        return groups.mapIndexed { index, (key, grouped) ->
+            // Ayni anahtarda celisen tip bildirimi dogrulamada yakalanir; burada ilk
+            // tipli fonksiyon belirleyicidir.
+            val declaredType = grouped.firstNotNullOfOrNull { it.declaredType }
+            // Tip argumani tasiyan hicbir tip DataStore ilkeli olamaz; JSON'a duser.
+            val primitive = declaredType
+                ?.takeUnless { it.hasArguments }
+                ?.let { PreferenceType.fromQualifiedName(it.rootFqName) }
+
+            PreferenceModel(
+                key = key,
+                constantSuffix = suffixes[index],
+                type = primitive ?: PreferenceType.OBJECT,
+                declaredType = declaredType,
+                functions = grouped,
+            )
+        }
+    }
 }

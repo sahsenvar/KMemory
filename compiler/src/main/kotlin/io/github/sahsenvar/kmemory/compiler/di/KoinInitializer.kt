@@ -6,6 +6,7 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.processor.Processor
 import io.github.sahsenvar.kmemory.compiler.usecase.CollectFunctionsUseCase
+import io.github.sahsenvar.kmemory.compiler.usecase.DeriveConstantSuffixUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateEraseFunctionUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateImplementationUseCase
 import io.github.sahsenvar.kmemory.compiler.usecase.GenerateImportsUseCase
@@ -71,6 +72,7 @@ object KoinInitializer {
 
                     factoryOf(::RenderTypeUseCase)
                     factoryOf(::CollectFunctionsUseCase)
+                    factoryOf(::DeriveConstantSuffixUseCase)
                     factoryOf(::GroupByKeyUseCase)
                     factoryOf(::ValidateInterfaceUseCase)
 
