@@ -14,6 +14,30 @@ import kotlinx.serialization.Serializable
 data class ProfileSample(val id: String, val name: String)
 
 /**
+ * Dogrulayici `init` tasiyan ornek tip — sanitizasyon kapisinin gercek sinav sorusu.
+ *
+ * `require` [IllegalArgumentException] firlatir ve kotlinx-serialization bunu SARMALAMAZ:
+ * cozme sirasinda constructor'dan cikan hata oldugu gibi yukari gider, mesajinda da saklanan
+ * degeri tasir. Yani "hata tipi serilestirme hatasi mi" diye bakan bir kapi bu cok yaygin
+ * deyimi kacirir; kapi hatanin TIPINE degil ciktigi KONUMA bagli olmak zorundadir.
+ */
+@Serializable
+data class ValidatedPinSample(val pin: String) {
+    init {
+        require(pin.length > GECERLI_PIN_MIN_UZUNLUK) { "gecersiz pin: $pin" }
+    }
+}
+
+/**
+ * [ValidatedPinSample]'in kabul esigi.
+ *
+ * Sinifin ICINDE `private companion object` olarak duramaz: `@Serializable` kendi
+ * `Companion`'ini uretir ve elle yazilan companion onun gorunurlugunu devralir — uretilen
+ * `serializer()` erisilemez olur, cozme calisma aninda `IllegalAccessError` ile duser.
+ */
+private const val GECERLI_PIN_MIN_UZUNLUK = 40
+
+/**
  * Islemcinin urettigi kodun davranisini dogrulayan ornek arayuz.
  *
  * Anahtarlar companion'daki `const` sabitlerdir: tuketicinin gercekte yazacagi bicim budur ve
@@ -85,6 +109,19 @@ interface SamplePreferences {
     @Write(KEY_NOTIFICATION_MUTED)
     suspend fun writeNotificationMuted(value: Boolean)
 
+    /**
+     * Dogrulayici `init` tasiyan tipin okunmasi; diskteki deger gecersizse cozme
+     * [IllegalArgumentException] ile duser — serilestirme hatasi DEGIL.
+     */
+    @Read(KEY_PIN)
+    fun readPin(): Flow<ValidatedPinSample?>
+
+    @Read(KEY_PIN)
+    suspend fun readPinOnce(): ValidatedPinSample?
+
+    @Write(KEY_PIN)
+    suspend fun writePin(value: ValidatedPinSample)
+
     @EraseAll
     suspend fun eraseAll()
 
@@ -95,6 +132,7 @@ interface SamplePreferences {
         private const val KEY_ITEMS = "3f1c0b2e-0004-4000-8000-000000000004"
         private const val KEY_TOKEN = "3f1c0b2e-0005-4000-8000-000000000005"
         private const val KEY_HISTORY = "3f1c0b2e-0006-4000-8000-000000000006"
+        private const val KEY_PIN = "3f1c0b2e-0007-4000-8000-000000000007"
         private const val KEY_NOTIFICATION_ENABLED = "notification_settings_enabled"
         private const val KEY_NOTIFICATION_MUTED = "notification_settings_muted"
     }

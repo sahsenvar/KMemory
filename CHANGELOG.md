@@ -53,6 +53,12 @@ Ek notlar:
   `PreferenceSerializationException` (store + key + orijinalin sınıf adı, `cause` YOK) olarak
   gider: kotlinx-serialization bozuk girdiyi hata mesajına gömdüğü için ham hata "dinleyici
   değerleri asla görmez" sözleşmesini ihlal ediyordu. Çağırana fırlatılan hata değişmedi
+- Sanitizasyon kapısı hatanın **tipine değil çıktığı konuma** bağlı: üretilen kod `encode`/`decode`
+  çağrısının etrafını sarar ve o sınırdan çıkan her `Throwable` sarmalanır. Tip kapısı
+  (`error is SerializationException`) `init { require(...) }` gibi doğrulayıcı deyimlerin
+  `IllegalArgumentException`'ını kaçırıyordu — kotlinx onu sarmalamaz, mesajı saklanan değeri
+  taşır ve olduğu gibi dinleyiciye giderdi. DataStore G/Ç hataları sınırın dışında oluştuğu için
+  sanitize **edilmez**; çağırana fırlatılan hata yine değişmedi
 - `kmemory { }` eksik `storeFactory`'yi **kurulum anında** net mesajlı bir
   `IllegalStateException` ile reddeder; önceden `lateinit` erişimi
   `UninitializedPropertyAccessException` fırlatıyordu

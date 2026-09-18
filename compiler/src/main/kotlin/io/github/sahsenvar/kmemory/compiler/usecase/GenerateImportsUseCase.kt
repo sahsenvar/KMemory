@@ -54,8 +54,10 @@ internal class GenerateImportsUseCase {
             models.map { it.type.keyFactory }.distinct().sorted().forEach { add("$PREFERENCES_CORE.$it") }
             add(KMEMORY)
             add(PREFERENCE_LISTENER)
-            // Uretilen `report()` yardimcisi her sinifta var; sarmalayici kosulsuz gerekir.
-            add(PREFERENCE_SERIALIZATION_EXCEPTION)
+            // Sanitize eden sarmalayici YALNIZCA serilestirme siniri varsa uretilir;
+            // salt-ilkel bir arayuzde `report()` hatayi oldugu gibi gecirir ve bu import
+            // kullanilmadan kalirdi.
+            if (needsJson) add(PREFERENCE_SERIALIZATION_EXCEPTION)
             if (anyFlowReturn) {
                 add(FLOW)
                 add(FLOW_CATCH)

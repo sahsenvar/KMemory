@@ -20,8 +20,15 @@ import io.github.sahsenvar.kmemory.compiler.model.ReturnShape
  * ile "disk okunamadi" durumlarini ayirt edemezdi; ikisi de `null` gorunurdu.
  *
  * Bildirim `listener.onError` ile DOGRUDAN degil, uretilen `report(key, error)` yardimcisi
- * uzerinden yapilir: JSON cozme hatasinin mesaji saklanan degeri icerir ve dinleyiciye
- * mesajsiz sarmalayici gitmek zorundadir (tasarim §8).
+ * uzerinden yapilir: cozme hatasinin mesaji saklanan degeri icerir ve dinleyiciye mesajsiz
+ * sarmalayici gitmek zorundadir (tasarim §8). `report` firlatilacak hatayi DONDURUR, bu
+ * yuzden cagri sekli `throw report(...)`'dir.
+ *
+ * Cozme cagrisi ayrica `serializing(key) { }` ile sarilir. Sanitizasyon kapisi hatanin
+ * TIPINE degil ciktigi KONUMA baglidir: `init { require(...) }` tasiyan bir model cozulurken
+ * `IllegalArgumentException` firlatir ve kotlinx bunu sarmalamaz, yani tip kapisi o yolu
+ * kacirirdi. Diskten okuma (`dataStore.data`) sarmanin DISINDADIR; G/C hatalari deger
+ * tasimaz ve sanitize edilmemelidir.
  */
 internal class GenerateReadFunctionUseCase {
 
@@ -58,10 +65,7 @@ internal class GenerateReadFunctionUseCase {
         |    override fun ${function.name}(): Flow<$type> =
         |        dataStore.data
         |            .map { prefs -> $read }
-        |            .catch { error ->
-        |                report(${model.keyNameProperty}, error)
-        |                throw error
-        |            }
+        |            .catch { error -> throw report(${model.keyNameProperty}, error) }
     """.trimMargin()
 
     /** `suspend fun x(): T?` — tek seferlik okuma; akisin ilk degeri alinir. */
@@ -75,8 +79,7 @@ internal class GenerateReadFunctionUseCase {
         |        try {
         |            dataStore.data.first().let { prefs -> $read }
         |        } catch (error: Throwable) {
-        |            report(${model.keyNameProperty}, error)
-        |            throw error
+        |            throw report(${model.keyNameProperty}, error)
         |        }
     """.trimMargin()
 
@@ -85,11 +88,16 @@ internal class GenerateReadFunctionUseCase {
      *
      * [PreferenceType.OBJECT] diskte JSON metni olarak durdugu icin once metin okunur, sonra
      * cozulur; `?.let` sayesinde anahtar yoksa cozme hic denenmez ve `null` doner.
+     *
+     * Cozme `serializing(key) { }` icindedir — sanitizasyon sinirini ciziyor. `let`
+     * parametresi `stored` diye ADLANDIRILIR: ic blok da lambda oldugu icin adsiz birakilan
+     * `it` okuyani yaniltirdi.
      */
     private fun readExpression(model: PreferenceModel, decodeType: String): String =
         when (model.type) {
             PreferenceType.OBJECT ->
-                "prefs[${model.keyProperty}]?.let { json.decodeFromString<$decodeType>(it) }"
+                "prefs[${model.keyProperty}]?.let { stored -> " +
+                    "serializing(${model.keyNameProperty}) { json.decodeFromString<$decodeType>(stored) } }"
 
             else -> "prefs[${model.keyProperty}]"
         }

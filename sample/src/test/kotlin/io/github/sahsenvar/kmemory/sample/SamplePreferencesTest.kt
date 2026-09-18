@@ -197,6 +197,78 @@ class SamplePreferencesTest {
         }
     }
 
+    /**
+     * Spec §8 — sanitizasyon TIPE degil ciktigi KONUMA baglidir.
+     *
+     * `init { require(...) }` Kotlin'de en yaygin dogrulama deyimidir ve
+     * [IllegalArgumentException] firlatir; kotlinx-serialization bunu sarmalamaz, yani
+     * "hata `SerializationException` mi" diye bakan bir kapi bu yolu KACIRIR ve saklanan PIN
+     * mesajla birlikte dinleyiciye — dolayisiyla Crashlytics'e — gider. Bu testin varligi,
+     * kapinin serilestirme SINIRINA bagli kalmasini zorunlu kilar: sinirdan cikan her hata,
+     * tipi ne olursa olsun, degersiz bir sarmalayiciya cevrilir.
+     *
+     * Bozuk JSON testinden farki bilerektir: orada hata zaten serilestirme tipindeydi, burada
+     * DEGIL. Ikisi birlikte "tip kapisi yeterli" iddiasini kapatir.
+     */
+    @Test
+    fun `dogrulayici init hatasi dinleyiciye saklanan degeri sizdirmaz`() = runTest {
+        val dataStore = store()
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(KEY_PIN)] = GECERSIZ_PIN_JSON
+        }
+        val raporlanan = mutableListOf<Throwable>()
+        val listener = object : PreferenceListener {
+            override fun onError(store: String, key: String?, error: Throwable) {
+                raporlanan += error
+            }
+        }
+        val p = SamplePreferencesImpl(dataStore, Json, listener)
+
+        // Cagirana firlatilan hata DEGISMEZ: hala dogrulayicinin kendi hatasi.
+        assertFailsWith<IllegalArgumentException> { p.readPin().first() }
+        assertFailsWith<IllegalArgumentException> { p.readPinOnce() }
+
+        assertEquals(2, raporlanan.size, "her iki okuma sekli de raporlamali")
+        raporlanan.forEach { error ->
+            val metin = error.toString() + "\n" + error.stackTraceToString()
+            assertFalse(
+                metin.contains(PIN_SIZINTI_KANITI),
+                "dinleyiciye giden hata saklanan PIN'i tasiyor: $metin",
+            )
+            val sarmalayici = assertIs<PreferenceSerializationException>(error)
+            assertEquals(KEY_PIN, sarmalayici.key)
+            assertEquals("IllegalArgumentException", sarmalayici.failureType)
+            assertNull(sarmalayici.cause, "cause tutulursa mesaj zincir uzerinden yine okunur")
+        }
+    }
+
+    /**
+     * Kapinin OTEKI yarisi: serilestirme SINIRININ DISINDA olusan hata sanitize EDILMEZ.
+     *
+     * Konum kapisi "her hatayi sarmala"ya kaysaydi disk hatalarinin mesaji da silinir ve tani
+     * bedelsiz yere korlesirdi. DataStore G/C hatasi saklanan degeri tasimaz; dinleyiciye
+     * oldugu gibi gitmeli. Test bunu bilerek SERILESTIRILEN bir anahtar uzerinde kosar —
+     * yani kapinin "anahtar nesne mi" degil "hata nereden cikti" sorusuna baktigini gosterir.
+     */
+    @Test
+    fun `disk hatasi sanitize edilmez ve tani mesajiyla raporlanir`() = runTest {
+        val raporlanan = mutableListOf<Throwable>()
+        val listener = object : PreferenceListener {
+            override fun onError(store: String, key: String?, error: Throwable) {
+                raporlanan += error
+            }
+        }
+        val p = SamplePreferencesImpl(OkumasiPatlayanStore, Json, listener)
+
+        assertFailsWith<IOException> { p.readProfile().first() }
+        assertFailsWith<IOException> { p.readProfileOnce() }
+
+        assertEquals(2, raporlanan.size, "her iki okuma sekli de raporlamali")
+        raporlanan.forEach { error ->
+            assertEquals(DISK_HATASI, assertIs<IOException>(error).message, "tani mesaji korunmali")
+        }
+    }
+
     // --- hata yolu: suspend sekli (spec §8 "raporla ve YENIDEN FIRLAT") --------------------
 
     /**
@@ -289,9 +361,21 @@ class SamplePreferencesTest {
         /** Kapanmamis nesne: kotlinx-serialization bunu cozemez ve girdiyi mesaja gomer. */
         const val BOZUK_JSON = "{\"id\":\"1\",\"name\":\"$SIZINTI_KANITI"
 
+        /** Dogrulayicinin reddedecegi PIN; hatanin hicbir metninde GORUNMEMELI. */
+        const val PIN_SIZINTI_KANITI = "SIZINTI-KANITI-PIN-9876"
+
+        /**
+         * Sozdizimi GECERLI, is kurali GECERSIZ bir JSON.
+         *
+         * Cozme sirasinda `require` duser; hata serilestirme tipinde degil
+         * [IllegalArgumentException] olur ve mesaji PIN'i tasir.
+         */
+        const val GECERSIZ_PIN_JSON = "{\"pin\":\"$PIN_SIZINTI_KANITI\"}"
+
         /** [SamplePreferences] companion'indaki ayni sabitler; orada `private`. */
         const val KEY_PROFILE = "3f1c0b2e-0002-4000-8000-000000000002"
         const val KEY_COUNT = "3f1c0b2e-0001-4000-8000-000000000001"
+        const val KEY_PIN = "3f1c0b2e-0007-4000-8000-000000000007"
 
         /** Yalnizca hata yolu testlerinde kullanilan disk hatasi mesaji. */
         const val DISK_HATASI = "disk okunamadi/yazilamadi"

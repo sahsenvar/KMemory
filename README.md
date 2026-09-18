@@ -269,22 +269,23 @@ interface PreferenceListener {
 **Dinleyici değerleri asla görmez** — yalnızca store adı ve anahtar. Aksi halde bir hata ayıklama
 günlükçüsü PIN'i veya oturum token'ını logcat'e düşürürdü.
 
-Hatalar yutulmaz: okuma akışında `.catch { report(…); throw it }`, yazma/silmede
-`try/catch` → raporla → yeniden fırlat. Üretilen sınıfta parametrenin varsayılanı
+Hatalar yutulmaz: okuma akışında `.catch { throw report(…) }`, yazma/silmede
+`try/catch` → raporla → aynı hatayı fırlat. Üretilen sınıfta parametrenin varsayılanı
 `PreferenceListener.None`'dır, yani vermek zorunda değilsin.
 
 #### `PreferenceSerializationException`
 
-Değer gizliliği `onError`'a verilen **hatanın içinde** de korunur. kotlinx-serialization bozuk
-girdiyi hata mesajına gömer:
+Değer gizliliği `onError`'a verilen **hatanın içinde** de korunur. Serileştirme sınırından çıkan
+hatalar bozuk ya da geçersiz girdiyi mesajlarına gömer:
 
 ```text
 Unexpected JSON token at offset 41: ... JSON input: {"pin":"1234","token":"ey..."}
+java.lang.IllegalArgumentException: geçersiz pin: 1234
 ```
 
 Ham hata dinleyiciye verilseydi bu mesaj Crashlytics'e düşerdi. Üretilen kod bu yüzden
-serileştirme kaynaklı hataları dinleyiciye vermeden önce mesaj taşımayan bir sarmalayıcıya
-çevirir:
+`encode`/`decode` çağrısının **etrafını** sarar ve o sınırdan çıkan her hatayı — tipi ne olursa
+olsun — mesaj taşımayan bir sarmalayıcıya çevirir:
 
 ```kotlin
 class PreferenceSerializationException : RuntimeException {
@@ -300,8 +301,17 @@ class PreferenceSerializationException : RuntimeException {
 - **Çağırana fırlatılan hata değişmez**: sarmalayıcı yalnızca dinleyiciye gider, `readX()` /
   `writeX()` çağıranı orijinal `SerializationException`'ı almaya devam eder. Çağıran zaten değere
   erişebilen koddur; orada gizlilik kaybı yoktur ve tam tanı korunur.
-- Serileştirme dışındaki hatalar (disk G/Ç, bozuk dosya, iptal) **olduğu gibi** geçer; değer
-  taşımadıkları için mesajlarını silmek tanılamayı bedelsiz yere körleştirirdi.
+- Serileştirme sınırının **dışında** oluşan hatalar (disk G/Ç, bozuk dosya, iptal) **olduğu gibi**
+  geçer; değer taşımadıkları için mesajlarını silmek tanılamayı bedelsiz yere körleştirirdi.
+- Kapı hatanın **tipine değil çıktığı konuma** bakar. `error is SerializationException` yetmez:
+  Kotlin'in en yaygın doğrulama deyimi
+
+  ```kotlin
+  @Serializable data class Pin(val value: String) { init { require(value.length > 40) { "geçersiz pin: $value" } } }
+  ```
+
+  çözme sırasında `IllegalArgumentException` fırlatır ve kotlinx-serialization bunu **sarmalamaz** —
+  yani tip kapısından geçer ve saklanan PIN'i yanında götürürdü.
 
 ---
 

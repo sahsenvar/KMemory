@@ -4,7 +4,9 @@ package io.github.sahsenvar.kmemory.compiler.usecase
  * `@Write`/`@Erase`/`@EraseAll` govdelerinin ORTAK iskeleti (spec §4.0).
  *
  * Uc erisim de ayni sirayi izler: isi yap → dinleyiciyi bilgilendir → hata cikarsa
- * `report(key, error)` ile bildir ve AYNI hatayi yeniden firlat. Tek degisen "is" satirlari.
+ * `throw report(key, error)` ile bildir ve cagirana AYNI hatayi firlat (`report` firlatilacak
+ * hatayi dondurur; serilestirme sinirinin ic isareti boylece cagirana sizmaz). Tek degisen
+ * "is" satirlari.
  * Iskelet tek yerde durmasaydi alti govde (uc erisim × iki donus sekli) bagimsiz kopyalar
  * olurdu ve dinleyici sozlesmesindeki bir duzeltmenin bir dali atlamasi kacinilmazdi —
  * onceki devirde `listener.onError` cagrilarinin dagilmis olmasi tam olarak bu sinifta bir
@@ -27,8 +29,7 @@ internal object MutationBody {
         work + "\n" +
         "            $notify\n" +
         "        } catch (error: Throwable) {\n" +
-        "            report($keyArgument, error)\n" +
-        "            throw error\n" +
+        "            throw report($keyArgument, error)\n" +
         "        }\n" +
         "    }"
 
@@ -53,8 +54,5 @@ internal object MutationBody {
         work + "\n" +
         "        $notify\n" +
         "        emit(Unit)\n" +
-        "    }.catch { error ->\n" +
-        "        report($keyArgument, error)\n" +
-        "        throw error\n" +
-        "    }"
+        "    }.catch { error -> throw report($keyArgument, error) }"
 }
