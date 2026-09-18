@@ -174,6 +174,9 @@ internal class GenerateImplementationUseCase(
     /**
      * Store adi ve her anahtar icin metin sabiti + tipli `Preferences.Key`.
      *
+     * Iki sabit AYRI ad uzaylarindan gelir (`RAW_` / `KEY_`, bkz. KeyConstantNaming); uzaylarin
+     * ayrik kalmasi ayni companion'a iki kez ayni tanimlayicinin yazilmasini imkansiz kilar.
+     *
      * `STORE_NAME` `private` DEGILDIR: uretilen uzanti fonksiyonu store'u isimle ister ve
      * sinifin disindadir. Sinif `internal` oldugu icin sabit de modul disina sizmaz.
      */

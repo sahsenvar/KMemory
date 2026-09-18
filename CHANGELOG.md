@@ -30,8 +30,14 @@ KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-a
 - Üretilen anahtar sabitlerinin adı **accessor adından** türer (`readProfile` → `KEY_PROFILE`),
   anahtarın metninden değil; UUID anahtarlarda eski biçim (`KEY_8B1D2C44000140008000_0`) üretilen
   kodu ve stacktrace'i okunamaz kılıyordu. Ad türetilemezse anahtarın ilk 20 alfanümeriği + grup
-  indeksine düşülür. Adlar çarpışmaz: aynı tabanı üreten gruplara indeks eklenir, çarpışmayanlar
-  indekssiz kalır
+  indeksine düşülür. Adlar çarpışmaz: aynı tanımlayıcıyı üreten gruplara indeks eklenir,
+  çarpışmayanlar indekssiz kalır
+- Anahtar metni sabiti `KEY_NAME_<ek>` yerine **`RAW_<ek>`** üretir. `KEY_` ile `KEY_NAME_` iç içe
+  önekler olduğu için `readNameSurname` + `readSurname` gibi ad çiftleri iki ayrı gruptan aynı
+  tanımlayıcıyı üretip companion'ı "Conflicting declarations" ile düşürüyordu; ayrık öneklerle bu
+  çarpışma yapısal olarak imkânsız. Tekillik ayrıca son tanımlayıcılar üzerinden doğrulanır
+- Erişim öneki soyulduktan sonra baştaki ayırıcılar kırpılır: `read_pin` artık `KEY__PIN` değil
+  `KEY_PIN` üretir
 - `Result<T>` sarmalaması desteklenmiyor; `@Write`'ta `Flow<Int>` gibi `Unit` taşımayan bir
   `Flow` de reddedilir
 - Üretilen sınıf `Context` yerine `DataStore<Preferences>` alır

@@ -127,9 +127,9 @@ birebir aynı üretilir.
 ```kotlin
 override fun writeAuthToken(value: String): Flow<Unit> = flow {
     dataStore.edit { prefs -> prefs[KEY_AUTH_TOKEN] = value }
-    listener.onWrite(STORE_NAME, KEY_NAME_AUTH_TOKEN)
+    listener.onWrite(STORE_NAME, RAW_AUTH_TOKEN)
     emit(Unit)
-}.catch { error -> report(KEY_NAME_AUTH_TOKEN, error); throw error }
+}.catch { error -> report(RAW_AUTH_TOKEN, error); throw error }
 ```
 
 İkisi de yerleşiktir ve aynı arayüzde, hatta aynı anahtar için birlikte bildirilebilir; hangisinin
@@ -162,7 +162,7 @@ Anahtarın kendisi bir UUID olabilir; üretilen sabitin **adı** ondan türemez.
 paylaşan grubun **ilk bildirilen** fonksiyonunun adından üretilir:
 
 ```kotlin
-@Read(KEY_PROFILE)  fun readProfile(): Flow<Profile?>      // KEY_PROFILE / KEY_NAME_PROFILE
+@Read(KEY_PROFILE)  fun readProfile(): Flow<Profile?>      // KEY_PROFILE / RAW_PROFILE
 @Write(KEY_PROFILE) fun writeProfile(value: Profile): Flow<Unit>
 @Erase(KEY_PROFILE) fun eraseProfile(): Flow<Unit>
 ```
@@ -171,15 +171,27 @@ Kural:
 
 1. Grubun ilk fonksiyonunun adı alınır.
 2. Baştaki erişim öneki kelime sınırında, büyük/küçük harf duyarsız soyulur:
-   `read` · `write` · `erase` · `get` · `set` · `put` · `delete` · `clear`.
+   `read` · `write` · `erase` · `get` · `set` · `put` · `delete` · `clear`. Soymadan sonra kalan
+   baştaki ayırıcılar da kırpılır (`read_pin` → `PIN`, `_PIN` değil).
 3. Kalan `UPPER_SNAKE_CASE`'e çevrilir — `readPinCode` → `PIN_CODE`,
    `writeSearchHistory` → `SEARCH_HISTORY`.
 4. Kalan boşsa (`fun read()`) ya da ASCII tanımlayıcı eki değilse, anahtarın ilk 20
-   alfanümeriği + grup indeksi kullanılır (`KEY_NAME_K_0`).
-5. İki grup aynı tabanı üretirse **çarpışan tüm gruplara** grup indeksi eklenir
+   alfanümeriği + grup indeksi kullanılır (`RAW_K_0`).
+5. Aynı **tanımlayıcıyı** üreten **çarpışan tüm gruplara** grup indeksi eklenir
    (`KEY_PROFILE_0` / `KEY_PROFILE_1`); çarpışmayanlar indekssiz kalır.
 
-Değişen yalnızca **tanımlayıcı adı**dır: anahtarın kendisi `KEY_NAME_X = "<uuid>"` literalinde
+### İki ad uzayı: `KEY_` ve `RAW_`
+
+Her grup companion'a iki tanımlayıcı yazar — anahtarın metnini tutan `const` sabit (`RAW_<ek>`) ve
+ondan yapılan `Preferences.Key` (`KEY_<ek>`). **Hiçbir önek diğerinin öneki olamaz:** `P2 == P1 + R`
+olsaydı `ek_1 == R + ek_2` olan her ek çiftinde iki farklı grup aynı tanımlayıcıyı üretir ve
+companion "Conflicting declarations" ile düşerdi. Metin sabiti eskiden `KEY_NAME_` öneki taşıyordu
+ve `readNameSurname` + `readSurname` ikilisi tam bu şekilde derlemeyi kırıyordu; `KEY_` / `RAW_`
+çifti ilk karakterinden ayrıştığı için uzaylar arası çarpışma artık **yapısal olarak imkânsız**.
+Tekillik ayrıca ekler üzerinden değil, companion'a yazılacak **son adlar** üzerinden doğrulanır —
+ileride üçüncü bir ad uzayı eklenirse koruma orada da devrededir.
+
+Değişen yalnızca **tanımlayıcı adı**dır: anahtarın kendisi `RAW_X = "<uuid>"` literalinde
 olduğu gibi kalır ve `const` sabitler derleme zamanında inline edildiği için APK'da görünmez —
 bu bir güvenlik değişikliği değil, üretilen kodun ve stacktrace'in okunabilirliğidir.
 

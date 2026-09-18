@@ -26,9 +26,14 @@ internal data class PreferenceModel(
     val functions: List<FunctionModel>,
 ) {
 
-    /** Uretilen companion'daki anahtar metninin sabit adi. */
-    val keyNameProperty: String = "KEY_NAME_$constantSuffix"
+    /**
+     * Uretilen companion'daki anahtar metninin sabit adi (`RAW_` uzayi).
+     *
+     * Onek [KeyConstantNaming]'den gelir: iki ad uzayinin AYRIK kalmasi (biri digerinin oneki
+     * olmamasi) uzaylar arasi tanimlayici carpismasini imkansiz kilan yapisal kuraldir.
+     */
+    val keyNameProperty: String = KeyConstantNaming.RAW_PREFIX + constantSuffix
 
-    /** Uretilen companion'daki `Preferences.Key<*>` degiskeninin adi. */
-    val keyProperty: String = "KEY_$constantSuffix"
+    /** Uretilen companion'daki `Preferences.Key<*>` degiskeninin adi (`KEY_` uzayi). */
+    val keyProperty: String = KeyConstantNaming.KEY_PREFIX + constantSuffix
 }

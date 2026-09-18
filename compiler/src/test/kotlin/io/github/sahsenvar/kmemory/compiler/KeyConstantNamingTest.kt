@@ -35,8 +35,8 @@ class KeyConstantNamingTest {
             """
         )
 
-        assertContains(source, """private const val KEY_NAME_PROFILE = "8b1d2c44-0001-4000-8000-000000000001"""")
-        assertContains(source, "private val KEY_PROFILE = intPreferencesKey(KEY_NAME_PROFILE)")
+        assertContains(source, """private const val RAW_PROFILE = "8b1d2c44-0001-4000-8000-000000000001"""")
+        assertContains(source, "private val KEY_PROFILE = intPreferencesKey(RAW_PROFILE)")
     }
 
     @Test
@@ -48,7 +48,7 @@ class KeyConstantNamingTest {
             """
         )
 
-        assertContains(source, """private const val KEY_NAME_PIN_CODE = "k"""")
+        assertContains(source, """private const val RAW_PIN_CODE = "k"""")
     }
 
     @Test
@@ -60,8 +60,8 @@ class KeyConstantNamingTest {
             """
         )
 
-        assertContains(source, """private const val KEY_NAME_PROFILE = "a"""")
-        assertContains(source, """private const val KEY_NAME_SEARCH_HISTORY = "b"""")
+        assertContains(source, """private const val RAW_PROFILE = "a"""")
+        assertContains(source, """private const val RAW_SEARCH_HISTORY = "b"""")
         // Okunabilirlik indeks EKLEYEREK degil, GEREKTIGINDE ekleyerek korunur.
         assertFalse(source.contains("KEY_PROFILE_"), source)
         assertFalse(source.contains("KEY_SEARCH_HISTORY_"), source)
@@ -82,15 +82,15 @@ class KeyConstantNamingTest {
         // "Conflicting declarations" ile duser.
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val source = readGenerated(result)
-        assertContains(source, """private const val KEY_NAME_PROFILE_0 = "a"""")
-        assertContains(source, """private const val KEY_NAME_PROFILE_1 = "b"""")
+        assertContains(source, """private const val RAW_PROFILE_0 = "a"""")
+        assertContains(source, """private const val RAW_PROFILE_1 = "b"""")
     }
 
     @Test
     fun `onek tasimayan fonksiyon adi oldugu gibi kullanilir`() {
         val source = generatedSource("""@Read("k") fun flag(): Flow<Boolean?>""")
 
-        assertContains(source, """private const val KEY_NAME_FLAG = "k"""")
+        assertContains(source, """private const val RAW_FLAG = "k"""")
     }
 
     @Test
@@ -103,7 +103,68 @@ class KeyConstantNamingTest {
         )
 
         // Geriye ad kalmadi; bugunku kirpilmis-hex + grup indeksi bicimi devreye girer.
-        assertContains(source, """private const val KEY_NAME_K_0 = "k"""")
+        assertContains(source, """private const val RAW_K_0 = "k"""")
+    }
+
+    /**
+     * `ek_A == "NAME_" + ek_B` oldugunda iki AYRI grup ayni tanimlayiciya cokuyordu:
+     * `readNameSurname` -> `NAME_SURNAME`, `readSurname` -> `SURNAME`; metin sabiti eskiden
+     * `KEY_NAME_` onekini tasidigi icin birincinin `Preferences.Key`'i (`KEY_` + `NAME_SURNAME`)
+     * ile ikincinin metin sabiti (`KEY_NAME_` + `SURNAME`) ayni ada iniyor ve companion
+     * "Conflicting declarations" veriyordu. Onekler artik ayrik (`KEY_` / `RAW_`).
+     *
+     * Ekler birbirinden farkli oldugu icin ek-bazli tekillestirme bu carpismayi GORMEZ; kontrol
+     * son tanimlayicilar uzerinden yapilmali ve ad uzaylari ayrik olmali.
+     */
+    @Test
+    fun `bir ekin digerinin NAME_ uzantisi olmasi derlemeyi kirmaz`() {
+        val result = compile(
+            """
+            @Read("8b1d2c44-0001-4000-8000-000000000001") fun readNameSurname(): Flow<String?>
+            @Read("8b1d2c44-0001-4000-8000-000000000002") fun readSurname(): Flow<String?>
+            """
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        // Uretilen kod gercekten derlenip yuklenebilmeli.
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    /** Ayni carpisma farkli erisim onekleriyle de tetiklenir: `getNameFilter` + `setFilter`. */
+    @Test
+    fun `farkli erisim onekleriyle olusan NAME_ ortusmesi derlemeyi kirmaz`() {
+        val result = compile(
+            """
+            @Read("8b1d2c44-0002-4000-8000-000000000001") fun getNameFilter(): Flow<String?>
+            @Write("8b1d2c44-0002-4000-8000-000000000002") suspend fun setFilter(value: String)
+            """
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    /** Tek kelimelik ekte de ayni ortusme olusur: `readNameFoo` + `readFoo`. */
+    @Test
+    fun `tek kelimelik NAME_ ortusmesi derlemeyi kirmaz`() {
+        val result = compile(
+            """
+            @Read("8b1d2c44-0003-4000-8000-000000000001") fun readNameFoo(): Flow<String?>
+            @Read("8b1d2c44-0003-4000-8000-000000000002") fun readFoo(): Flow<String?>
+            """
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        result.classLoader.loadClass("fixture.TestPreferencesImpl")
+    }
+
+    /** Onek soyulduktan sonra bastaki ayirici da kirpilir: `read_pin` -> `PIN`, `_PIN` degil. */
+    @Test
+    fun `onek soyulunca bastaki ayirici karakter kirpilir`() {
+        val source = generatedSource("""@Read("k") fun read_pin(): Flow<Int?>""")
+
+        assertContains(source, """private const val RAW_PIN = "k"""")
+        assertFalse(source.contains("__PIN"), source)
     }
 
     // --- altyapi -------------------------------------------------------------------------
