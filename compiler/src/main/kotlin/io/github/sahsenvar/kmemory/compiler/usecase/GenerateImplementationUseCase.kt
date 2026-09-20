@@ -10,6 +10,7 @@ import io.github.sahsenvar.kmemory.compiler.logger.Logger
 import io.github.sahsenvar.kmemory.compiler.model.Accessor
 import io.github.sahsenvar.kmemory.compiler.model.FunctionModel
 import io.github.sahsenvar.kmemory.compiler.model.KeyConstantNaming
+import io.github.sahsenvar.kmemory.compiler.model.KotlinStringLiteral
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceModel
 import io.github.sahsenvar.kmemory.compiler.model.PreferenceType
 
@@ -56,7 +57,13 @@ internal class GenerateImplementationUseCase(
 
         val storeName = storeNameOf(declaration)
         if (storeName == null) {
-            logger.error("$interfaceName: @Preferences(name = ...) okunamadı", declaration)
+            logger.error(
+                "$interfaceName: @Preferences(name = ...) derleme zamanında bir String sabitine " +
+                    "çözülemedi. Değer literal ya da erişilebilir bir `const val` olmalı — " +
+                    "`private` bir companion sabiti ya da niteliksiz referans çözülmez " +
+                    "(nitelikli kullanın: `@Preferences(name = X.STORE_NAME)`).",
+                declaration,
+            )
             return
         }
 
@@ -183,12 +190,12 @@ internal class GenerateImplementationUseCase(
      */
     private fun companionObject(storeName: String, models: List<PreferenceModel>): String {
         val keys = models.joinToString("\n") { model ->
-            "        private const val ${model.keyNameProperty} = \"${model.key}\"\n" +
+            "        private const val ${model.keyNameProperty} = ${KotlinStringLiteral.quoted(model.key)}\n" +
                 "        private val ${model.keyProperty} = ${model.type.keyFactory}(${model.keyNameProperty})"
         }
 
         return "    companion object {\n" +
-            "        const val ${KeyConstantNaming.STORE_NAME_IDENTIFIER} = \"$storeName\"\n" +
+            "        const val ${KeyConstantNaming.STORE_NAME_IDENTIFIER} = ${KotlinStringLiteral.quoted(storeName)}\n" +
             keys +
             "\n    }"
     }

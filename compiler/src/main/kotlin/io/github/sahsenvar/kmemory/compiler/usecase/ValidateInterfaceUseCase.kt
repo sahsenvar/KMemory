@@ -32,11 +32,34 @@ internal class ValidateInterfaceUseCase(
         val name = declaration.simpleName.asString()
         var valid = true
 
-        // CollectFunctions anotasyonsuz fonksiyonu sessizce eler; fark buradan yakalanir.
-        // [declaredFunctions] YALNIZCA soyut fonksiyonlari tasir: govdesi olan bir uye kendi
-        // uygulamasini zaten getirir, anotasyon zorunlulugu tasimaz.
-        if (declaredFunctions.size != functions.size) {
-            logger.error("$name: her fonksiyon @Read/@Write/@Erase/@EraseAll'dan birini taşımalı", declaration)
+        // CollectFunctions iki AYRI sebeple fonksiyon eler ve ikisi ayri hata ister:
+        //   (a) hic accessor anotasyonu yok,
+        //   (b) anotasyon VAR ama `key`/`name` argumani derleme-zamani String sabitine
+        //       cozulemedi (`?.value as? String` null doner).
+        // Eskiden ikisi de tek bir "her fonksiyon ... birini taşımalı" mesajina dusuyordu; (b)
+        // durumundaki kullanici anotasyonu YAZMIS oluyor ve olmayan bir eksigi ariyordu.
+        val modelledNames = functions.mapTo(mutableSetOf()) { it.name }
+        declaredFunctions.forEach { function ->
+            if (function.simpleName.asString() in modelledNames) return@forEach
+
+            val hasAccessor = function.annotations.any { annotation ->
+                annotation.shortName.asString() in ACCESSOR_ANNOTATION_NAMES
+            }
+            val label = "$name.${function.simpleName.asString()}"
+            if (hasAccessor) {
+                logger.error(
+                    "$label: accessor anotasyonu var ama 'key' argümanı derleme zamanında bir " +
+                        "String sabitine çözülemedi. Değer literal ya da erişilebilir bir " +
+                        "`const val` olmalı; `private` bir companion sabiti ya da niteliksiz " +
+                        "referans çözülmez.",
+                    function,
+                )
+            } else {
+                logger.error(
+                    "$label: her fonksiyon @Read/@Write/@Erase/@EraseAll'dan birini taşımalı",
+                    function,
+                )
+            }
             valid = false
         }
 
@@ -45,6 +68,27 @@ internal class ValidateInterfaceUseCase(
         if (functions.count { it.accessor == Accessor.ERASE_ALL } > 1) {
             logger.error("$name: birden fazla @EraseAll bildirilmiş", declaration)
             valid = false
+        }
+
+        // Bir fonksiyon TAM BIR accessor anotasyonu tasimali.
+        //
+        // [CollectFunctionsUseCase.toModel] anotasyonlara SIRAYLA bakip ilk eslesende donuyor
+        // (Read -> Write -> Erase -> EraseAll). Yani `@Erase @EraseAll fun x()` yazan bir
+        // kullanicida ikincisi SESSIZCE yok sayiliyor ve kullanici yazmadigi bir davranisi
+        // aliyordu. Sayim burada yapilir cunku toplama asamasi coklu anotasyonu tek modele
+        // indirgiyor; fark ancak bildirime bakarak gorulur.
+        declaredFunctions.forEach { function ->
+            val accessorCount = function.annotations.count { annotation ->
+                annotation.shortName.asString() in ACCESSOR_ANNOTATION_NAMES
+            }
+            if (accessorCount > 1) {
+                logger.error(
+                    "$name.${function.simpleName.asString()}: birden fazla accessor anotasyonu " +
+                        "taşıyor ($accessorCount); @Read/@Write/@Erase/@EraseAll'dan yalnızca biri olmalı",
+                    function,
+                )
+                valid = false
+            }
         }
 
         pairDeclarations(declaredFunctions, functions).forEach { (function, model) ->
@@ -92,7 +136,7 @@ internal class ValidateInterfaceUseCase(
         val valueType = if (returnsFlow) returned?.arguments?.firstOrNull()?.type?.resolve() else returned
         val builtIn = isBuiltInShape(model.accessor, valueType)
 
-        // spec §4.1 — 0.1.0'da YALNIZCA yerlesik sekiller gecer.
+        // spec §4.1 — SIMDILIK yalnizca yerlesik sekiller gecer.
         //
         // `kmemory.adapters` bypass'i buradan KALDIRILDI: dogrulamayi gevsetiyor ama uretimi hic
         // degistirmiyordu; tanitilan tip dogrulamadan gecip uretimde yok sayiliyor ve tuketicide
@@ -104,11 +148,32 @@ internal class ValidateInterfaceUseCase(
                     "dönüş şekli değil. " +
                     "Yerleşik şekiller — @Read: Flow<T?> ya da suspend fun (): T?; " +
                     "@Write/@Erase/@EraseAll: Flow<Unit> ya da suspend fun (): Unit. " +
-                    "Adaptör bağlantısı 0.2.0'da gelecek; 0.1.0'da kmemory.adapters hiçbir tipi " +
+                    "Adaptör bağlantısı henüz gelmedi; kmemory.adapters hiçbir tipi " +
                     "gevşetmez (spec §4.1).",
                 function,
             )
             valid = false
+        }
+
+        // spec §4.1 — YAZMANIN PARAMETRE TIPI de yazilabilir olmali.
+        //
+        // [isBuiltInShape] WRITE dalinda yalnizca DONUS degerinin `Unit` oldugunu dogruluyor;
+        // diske giden asil deger ise PARAMETREdir ve hicbir kontrolden GECMIYORDU. Sonuc:
+        // `@Write fun f(value: () -> Unit)` gibi bir imza dogrulamadan sessizce gecip uretilen
+        // dosyada `json.encodeToString(Function0)` ile patliyordu — hata kullanicinin arayuzunde
+        // degil URETILEN kodda cikiyordu, yani teshisi en zor bicimde.
+        if (model.accessor == Accessor.WRITE) {
+            // Parametre SAYISI zaten yukarida dogrulandi; eksikse ikinci bir hata basma.
+            val parameterType = function.parameters.singleOrNull()?.type?.resolve()
+            if (parameterType != null && !isStorableShape(parameterType)) {
+                logger.error(
+                    "$label: @Write parametresi " +
+                        "'${parameterType.declaration.simpleName.asString()}' diske yazılabilir " +
+                        "bir tip değil (Unit, yıldız izdüşümü ya da tanınmayan jenerik sarmalayıcı).",
+                    function,
+                )
+                valid = false
+            }
         }
 
         // Nullability yalnizca YERLESIK okuma sekli icin zorlanir; adaptorlu bir sekilde
@@ -159,8 +224,18 @@ internal class ValidateInterfaceUseCase(
 
         val abstractProperties = declaration.getAllProperties().filter { it.isAbstract() }
 
-        (inheritedFunctions + abstractProperties)
+        // Isim kumesi YALNIZCA fonksiyonlara uygulanir.
+        //
+        // Eskiden tek bir `filterNot { simpleName in generated }` hem fonksiyonlari hem
+        // property'leri suzuyordu. Ama [generated] uretilen FONKSIYON adlarini tasir ve isleyici
+        // hicbir property URETMEZ; dolayisiyla uretilen bir fonksiyonla ayni ada sahip soyut bir
+        // property sessizce "uretildi" sayilip atlanıyordu. Sonuc: uretilen sinif o uyeyi
+        // uygulamadigi icin derleme, kullanicinin arayuzunde degil URETILEN dosyada patliyordu.
+        // Karsilastirma artik (uye turu, ad) ciftine gore: property'ler istisnasiz raporlanir.
+        val unimplementedFunctions = inheritedFunctions
             .filterNot { it.simpleName.asString() in generated }
+
+        (unimplementedFunctions + abstractProperties)
             .forEach { member ->
                 logger.error(memberError(interfaceName, ownFqName, member), declaration)
                 valid = false
@@ -293,6 +368,15 @@ internal class ValidateInterfaceUseCase(
 
         /** Cozulemeyen tipin hata mesajindaki karsiligi (`Flow<*>` gibi). */
         const val UNKNOWN_TYPE = "*"
+
+        /**
+         * Dort accessor anotasyonunun BASIT adlari.
+         *
+         * `shortName` ile karsilastiriliyor cunku KSP anotasyonun tam nitelikli adini ancak
+         * cozulmus tipten verir; toplama asamasi da (`CollectFunctionsUseCase.keyOf`) ayni
+         * sekilde `shortName` kullaniyor — iki taraf ayni olcutu kullanmali.
+         */
+        val ACCESSOR_ANNOTATION_NAMES = setOf("Read", "Write", "Erase", "EraseAll")
 
         /** Her tipin ustundeki uyeler; uretime konu degildir. */
         val ANY_FQ_NAMES = setOf("kotlin.Any", "java.lang.Object")

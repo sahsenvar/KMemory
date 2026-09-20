@@ -383,7 +383,9 @@ class ValidationTest {
         // Bypass dogrulamayi gevsetiyor ama uretimi hic degistirmiyordu: tip dogrulamadan
         // gecip uretimde yok sayiliyor, tuketicide patliyordu.
         assertError(result, "yerleşik bir dönüş şekli değil")
-        assertContains(result.messages, "0.2.0")
+        // Eskiden burada "0.2.0" pinliydi; surum artinca mesaj kendi kendisiyle celisiyordu
+        // ("0.2.0'dasin, adaptorler 0.2.0'da gelecek"). Pin artik SURUME degil IFADEYE bakiyor.
+        assertContains(result.messages, "Adaptör bağlantısı henüz gelmedi")
     }
 
     @Test
@@ -419,6 +421,64 @@ class ValidationTest {
     }
 
     // --- altyapi -------------------------------------------------------------------------
+
+    // --- 0.2.0 dogrulama bosluklari (coklu-mercek incelemesinde bulundu) -------------------
+
+    @Test
+    fun `Write parametresi yazilamaz tipse hata verir`() {
+        // Bosluk: `isStorableShape` yalnizca @Read'in DONUS tipine uygulaniyordu; diske giden
+        // asil deger olan PARAMETRE hic kontrol edilmiyordu. Sonuc, KSP tanisi olmadan uretilen
+        // dosyada `json.encodeToString(Function0)` ile derleme hatasiydi.
+        val result = compile(
+            """
+            @Write("k") suspend fun writeK(value: () -> Unit)
+            """
+        )
+
+        assertError(result, "diske yazılabilir bir tip değil")
+    }
+
+    @Test
+    fun `bir fonksiyon birden fazla accessor anotasyonu tasiyamaz`() {
+        // Bosluk: toplama asamasi anotasyonlara SIRAYLA bakip ilk eslesende donuyordu, yani
+        // ikinci anotasyon SESSIZCE yok sayiliyor ve kullanici yazmadigi davranisi aliyordu.
+        val result = compile(
+            """
+            @Erase("k")
+            @EraseAll
+            suspend fun eraseK()
+            """
+        )
+
+        assertError(result, "birden fazla accessor anotasyonu")
+    }
+
+    @Test
+    fun `anahtarda dolar ve tirnak olsa bile uretilen dosya derlenir`() {
+        // Bosluk: anahtar metni uretilen Kotlin string-literal'ine KACISSIZ gomuluyordu.
+        // `$` bir string-template referansi sanilip "unresolved reference", cift tirnak ise
+        // literal'i erken kapatip parse hatasi veriyordu — ve hata kullanicinin arayuzunde
+        // DEGIL, uretilen dosyada cikiyordu.
+        //
+        // Asagidaki metin FIXTURE KAYNAGINA yazilacak hali, yani kacisli. KSP onu cozdugunde
+        // anahtar gercekte `user$name"quoted"\path` olur ve isleyici onu yeniden kacislamak
+        // zorundadir. Parca parca kuruluyor cunku ic ice kacis saymak bu dosyada bir kez
+        // hataya yol acti.
+        val slash = "\\"
+        val dollar = "$"
+        val quote = "\""
+        val escapedForFixture = "user" + slash + dollar + "name" +
+            slash + quote + "quoted" + slash + quote +
+            slash + slash + "path"
+
+        val result = compile(
+            """
+            @Read("$escapedForFixture") fun readK(): Flow<String?>
+            """
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    }
 
     private fun assertError(result: JvmCompilationResult, message: String) {
         assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)

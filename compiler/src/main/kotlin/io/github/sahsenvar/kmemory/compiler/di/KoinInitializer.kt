@@ -41,7 +41,7 @@ import org.koin.dsl.module
  */
 object KoinInitializer {
 
-    /** spec §9.1 — virgulle ayrilmis `ReturnAdapter` FQN listesi. 0.1.0'da OKUNUR ama UYGULANMAZ. */
+    /** spec §9.1 — virgulle ayrilmis `ReturnAdapter` FQN listesi. SIMDILIK OKUNUR ama UYGULANMAZ. */
     private const val ADAPTERS_OPTION = "kmemory.adapters"
 
     /**
@@ -96,7 +96,7 @@ object KoinInitializer {
     }
 
     /**
-     * [ADAPTERS_OPTION] 0.1.0'da hicbir donus tipini gevsetmez (spec §4.1).
+     * [ADAPTERS_OPTION] simdilik hicbir donus tipini gevsetmez (spec §4.1).
      *
      * Secenek yine de OKUNUR ve verildiginde uyari verilir: sessizce yok saymak, tuketicinin
      * "tipimi tanittim, artik geciyor" sanmasina yol acar — bypass'in eski hali tam olarak boyle
@@ -107,8 +107,8 @@ object KoinInitializer {
         if (value.isEmpty()) return
 
         Logger(environmentLogger).warn(
-            "kmemory.adapters henüz desteklenmiyor: 0.1.0'da hiçbir dönüş tipi gevşetilmez, " +
-                "ReturnAdapter bağlantısı 0.2.0'da gelecek (spec §4.1). Yok sayılan değer: '$value'."
+            "kmemory.adapters henüz desteklenmiyor: işlemci hiçbir dönüş tipini gevşetmez, " +
+                "ReturnAdapter bağlantısı henüz gelmedi (spec §4.1). Yok sayılan değer: '$value'."
         )
     }
 }

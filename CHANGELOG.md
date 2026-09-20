@@ -7,6 +7,44 @@ Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) temellidir ve pr
 
 ---
 
+## [0.2.0]
+
+Çok mercekli bir kod incelemesinde bulunan beş doğrulama/kod-üretim boşluğu kapatıldı. Hiçbiri
+zad-android'in mevcut dokuz `*MemorySource`'unda tetiklenmiyordu (anahtarlar UUID/SCREAMING_SNAKE,
+`@Write` parametreleri düz tipler) — hepsi **gizli** hatalardı.
+
+**Minor sürüm, çünkü yeni doğrulamalar önceden kabul edilen arayüzleri reddedebilir.**
+
+### Düzeltildi
+
+- **Anahtar ve store adı üretilen kaynağa kaçışsız gömülüyordu.** KSP `@Read(key = ...)` değerini
+  ÇÖZÜLMÜŞ bir `String` olarak verir, yani içinde gerçek bir `$` ya da `"` olabilir. Kaçışsız
+  gömüldüğünde `$` string-template sanılıp "unresolved reference", çift tırnak ise literal'i erken
+  kapatıp parse hatası veriyordu — üstelik hata kullanıcının arayüzünde değil ÜRETİLEN dosyada
+  çıkıyordu. Yeni `KotlinStringLiteral` yardımcısı; düşmanca anahtarla uçtan uca KSP testi eklendi.
+- **`@Write` parametre tipi hiçbir doğrulamadan geçmiyordu.** `isStorableShape` yalnızca `@Read`'in
+  dönüş tipine uygulanıyordu; diske giden asıl değer olan parametre kontrolsüzdü. Sonuç:
+  `@Write fun f(value: () -> Unit)` KSP tanısı olmadan geçip üretilen dosyada
+  `json.encodeToString(Function0)` ile patlıyordu.
+- **Birden fazla accessor anotasyonu sessizce ilkini seçiyordu.** Toplama aşaması anotasyonlara
+  sırayla bakıp ilk eşleşende dönüyordu; `@Erase @EraseAll fun x()` yazan kullanıcı uyarı almadan
+  yazmadığı davranışı alıyordu. Artık hata.
+- **Miras üye kontrolü yalnızca isme bakıyordu.** Üretilen bir fonksiyonla aynı ada sahip soyut bir
+  `property` "üretildi" sayılıp atlanıyordu; işlemci hiçbir property üretmediği için üretilen sınıf
+  o üyeyi uygulamıyor ve derleme yine ÜRETİLEN dosyada patlıyordu.
+- **Çözülemeyen `key`/`name` sabiti yanıltıcı hata veriyordu.** Anahtar çözülemeyince fonksiyon
+  sessizce eleniyor ve kullanıcı "her fonksiyon @Read/@Write/@Erase/@EraseAll'dan birini taşımalı"
+  hatasını alıyordu — oysa anotasyon vardı. İki durum artık iki ayrı mesaj veriyor ve çözülemeyen
+  sabit mesajı çareyi söylüyor (`private` companion sabiti ve niteliksiz referans çözülmez).
+
+### Değişti
+
+- `kmemory.adapters` ile ilgili mesajlar artık sürüm adı vermiyor ("0.2.0'da gelecek" yerine "henüz
+  gelmedi"). Adaptör bağlantısı bu sürümde de YOK; sürüm numarası veren bir vaat, o sürüme
+  gelindiğinde kendi kendisiyle çelişiyordu.
+
+---
+
 ## [0.1.0]
 
 KspPreferences 2.0.0'dan fork. Yeni koordinatlar (`io.github.sahsenvar:kmemory-annotations`,
