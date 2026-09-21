@@ -130,8 +130,9 @@ internal class GenerateImplementationUseCase(
      */
     private fun reportFunction(): String = """
         |    private fun report(key: String?, error: Throwable): Throwable {
+        |        if (error is CancellationException) return error
         |        listener.onError(STORE_NAME, key, PreferenceFailure.from(STORE_NAME, key, error))
-        |        return error
+        |        return errorMapper.map(STORE_NAME, key, error)
         |    }
     """.trimMargin()
 
@@ -152,6 +153,10 @@ internal class GenerateImplementationUseCase(
             add("    private val dataStore: DataStore<Preferences>,")
             if (needsJson) add("    private val json: Json,")
             add("    private val listener: PreferenceListener = PreferenceListener.None,")
+            // Varsayilan deger ZORUNLU: bu parametre 0.3.0'da eklendi ve constructor'i dogrudan
+            // cagiran mevcut kod (ornegin kutuphanenin kendi testleri) varsayilan olmadan
+            // DERLENMEZDI. `Passthrough` ayni zamanda "kanca opsiyonel" sozlesmesinin kendisi.
+            add("    private val errorMapper: PreferenceErrorMapper = PreferenceErrorMapper.Passthrough,")
         }.joinToString("\n")
 
         return "internal class $implementationName(\n$parameters\n) : $interfaceName {"
@@ -221,6 +226,7 @@ internal class GenerateImplementationUseCase(
             add("store($implementationName.STORE_NAME)")
             if (needsJson) add("json")
             add("listener")
+            add("errorMapper")
         }.joinToString(", ")
 
         return "${visibility}fun KMemory.$functionName(): $interfaceName =\n" +

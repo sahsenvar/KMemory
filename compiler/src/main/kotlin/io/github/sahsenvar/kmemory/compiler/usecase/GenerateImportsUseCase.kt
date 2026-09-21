@@ -62,6 +62,11 @@ internal class GenerateImportsUseCase {
             // cozulmez; bu satir dusunce uretilen kod "unresolved reference: from" ile patlar.
             add(PREFERENCE_FAILURE_FROM)
             add(PREFERENCE_LISTENER)
+            // Ikisi de KOSULSUZ: uretilen report() her erisim sekli icin ayni govdeyi
+            // tasir -- once iptali eler, sonra dinleyiciye rapor eder, sonra mapper'i
+            // cagirir.
+            add(PREFERENCE_ERROR_MAPPER)
+            add(CANCELLATION)
             if (anyFlowReturn) {
                 add(FLOW)
                 add(FLOW_CATCH)
@@ -101,6 +106,8 @@ internal class GenerateImportsUseCase {
         const val PREFERENCE_LISTENER = "io.github.sahsenvar.kmemory.listener.PreferenceListener"
         const val PREFERENCE_FAILURE = "io.github.sahsenvar.kmemory.listener.PreferenceFailure"
         const val PREFERENCE_FAILURE_FROM = "io.github.sahsenvar.kmemory.listener.from"
+        const val PREFERENCE_ERROR_MAPPER = "io.github.sahsenvar.kmemory.listener.PreferenceErrorMapper"
+        const val CANCELLATION = "kotlin.coroutines.cancellation.CancellationException"
         const val FLOW = "kotlinx.coroutines.flow.Flow"
         const val FLOW_BUILDER = "kotlinx.coroutines.flow.flow"
         const val FLOW_CATCH = "kotlinx.coroutines.flow.catch"
