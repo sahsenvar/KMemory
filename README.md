@@ -257,6 +257,9 @@ val memory = kmemory {
     }
     json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
     listener = crashlyticsPreferenceListener
+    errorMapper = PreferenceErrorMapper { store, key, error ->
+        error.toPreferenceError(PreferenceOperation(store, key))
+    }
 }
 
 val auth: AuthMemorySource = memory.authMemorySource()   // üretilen uzantı
@@ -313,6 +316,60 @@ hata ayıklama günlükçüsü PIN'i veya oturum token'ını logcat'e düşürü
 Hatalar yutulmaz: okuma akışında `.catch { throw report(…) }`, yazma/silmede
 `try/catch` → raporla → aynı hatayı fırlat. Üretilen sınıfta parametrenin varsayılanı
 `PreferenceListener.None`'dır, yani vermek zorunda değilsin.
+
+### `PreferenceErrorMapper` — Ktor'un `HttpResponseValidator`'ının karşılığı
+
+`PreferenceListener` **gözlem** kancasıdır: raporlar, hatayı değiştirmez. Çağırana giden hatayı
+**çevirmek** için ayrı bir kanca vardır.
+
+```kotlin
+fun interface PreferenceErrorMapper {
+    fun map(store: String, key: String?, error: Throwable): Throwable
+
+    companion object { val Passthrough: PreferenceErrorMapper }
+}
+```
+
+Ktor'daki desenin birebir karşılığıdır:
+
+```kotlin
+// Ktor
+HttpResponseValidator {
+    handleResponseExceptionWithRequest { cause, request ->
+        if (cause is CancellationException) throw cause
+        throw cause.toRemoteError(request.toRemoteRequestInfo())
+    }
+}
+
+// KMemory
+errorMapper = PreferenceErrorMapper { store, key, error ->
+    error.toPreferenceError(PreferenceOperation(store, key))
+}
+```
+
+**Kütüphane hatayı sınıflandırmaz.** Kendi hata hiyerarşisini dayatmaz, yalnızca çevirme
+*noktasını* verir — hangi `IOException`'ın "disk dolu", hangisinin "bozuk dosya" sayılacağı
+uygulamanın bilgisidir. Ktor de böyle yapar.
+
+**İki yol ayrıdır ve ayrı kalmalıdır:**
+
+| | ne görür | nereye gider |
+|---|---|---|
+| `PreferenceListener.onError` | yalnızca `PreferenceFailure` — tip adı + yığın izi | raporlama (günlükleme, crash reporter) |
+| `PreferenceErrorMapper.map` | orijinal `Throwable` | çağırana fırlatılan hata |
+
+Mapper'ın orijinali görmesi mührü delmez: çağıran zaten bugün de orijinali alıyor.
+
+> ⚠️ Döndürdüğün hatanın orijinali `cause` olarak tutup tutmayacağı **senin** kararın. Tutmak
+> tanıyı zenginleştirir, ama o hatayı mesajıyla loglayan her yol aşağıdaki `PreferenceFailure`
+> bölümünde anlatılan sızıntıyı geri açar.
+
+**İptal asla çevrilmez.** Üretilen `report`, mapper'ı çağırmadan önce `CancellationException`'ı
+eler — iptal bir hata değildir ve başka bir tipe çevrilmesi coroutine iptal zincirini sessizce
+kırardı. (0.3.0 öncesinde iptal `onError`'a da gidiyordu; o da düzeltildi.)
+
+Kanca **opsiyoneldir**: varsayılan `Passthrough` hiçbir şey çevirmez, yani vermeyen kurulumlar
+0.2.0 davranışını aynen sürdürür.
 
 #### `PreferenceFailure`
 
