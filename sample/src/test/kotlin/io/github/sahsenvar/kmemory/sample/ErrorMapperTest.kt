@@ -3,7 +3,6 @@ package io.github.sahsenvar.kmemory.sample
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import io.github.sahsenvar.kmemory.kmemory
-import io.github.sahsenvar.kmemory.listener.PreferenceErrorMapper
 import io.github.sahsenvar.kmemory.listener.PreferenceFailure
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +20,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * [PreferenceErrorMapper] sozlesmesi: Ktor'daki `HttpResponseValidator` kancasinin karsiligi.
+ * `errorMapper` sozlesmesi: Ktor'daki `HttpResponseValidator` kancasinin karsiligi.
  *
  * Kutuphane hatayi SINIFLANDIRMAZ; yalnizca cevirme NOKTASINI verir. Burada pinlenen dort sey:
  *
@@ -33,7 +32,7 @@ import kotlin.test.assertTrue
  * 4. Mapper varken de dinleyici muhrü BOZULMAZ: `onError` hala yalnizca [PreferenceFailure]
  *    gorur. Iki yol ayridir -- dinleyici raporlar, mapper cagirana giden hatayi uretir.
  */
-class PreferenceErrorMapperTest {
+class ErrorMapperTest {
 
     @Test
     fun `mapper verilirse cagiran CEVRILMIS hatayi alir`() = runTest {
@@ -93,11 +92,11 @@ class PreferenceErrorMapperTest {
     /**
      * Iptal bir hata DEGILDIR.
      *
-     * Bugun KMemory'de [CancellationException] hic ele alinmiyor: `report` onu da bir hata sanip
-     * dinleyiciye veriyor, yani iptal edilen her corutin sahte bir hata kaydi uretiyor. Kanca
-     * eklenirken bu iki kat kotulesirdi -- iptal ayrica ALAN HATASINA da cevrilirdi ve cagiran
-     * `CancellationException` yerine alakasiz bir tip gorurdu, ki bu corutin iptal zincirini
-     * sessizce kirar.
+     * 0.3.0 oncesinde [CancellationException] hic ele alinMIYORDU: `report` onu da bir hata
+     * sanip dinleyiciye veriyor, yani iptal edilen her corutin sahte bir hata kaydi uretiyordu.
+     * Kanca eklenirken bu iki kat kotulesecekti -- iptal ayrica ALAN HATASINA da cevrilirdi ve
+     * cagiran `CancellationException` yerine alakasiz bir tip gorurdu, ki bu corutin iptal
+     * zincirini sessizce kirar.
      */
     @Test
     fun `iptal ne raporlanir ne cevrilir`() = runTest {
@@ -157,7 +156,7 @@ class PreferenceErrorMapperTest {
     fun `kmemory DSL uzerinden verilen mapper uretilen kaynaga ulasir`() = runTest {
         val memory = kmemory {
             storeFactory = { SondaStore }
-            errorMapper = PreferenceErrorMapper { store, key, error -> AlanHatasi(store, key, error) }
+            errorMapper = { store, key, error -> AlanHatasi(store, key, error) }
         }
 
         assertFailsWith<AlanHatasi> { memory.samplePreferences().writeCount(42) }

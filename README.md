@@ -257,9 +257,7 @@ val memory = kmemory {
     }
     json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
     listener = crashlyticsPreferenceListener
-    errorMapper = PreferenceErrorMapper { store, key, error ->
-        error.toPreferenceError(PreferenceOperation(store, key))
-    }
+    errorMapper = { store, key, error -> error.toMemoryError(store, key) }
 }
 
 val auth: AuthMemorySource = memory.authMemorySource()   // üretilen uzantı
@@ -317,18 +315,18 @@ Hatalar yutulmaz: okuma akışında `.catch { throw report(…) }`, yazma/silmed
 `try/catch` → raporla → aynı hatayı fırlat. Üretilen sınıfta parametrenin varsayılanı
 `PreferenceListener.None`'dır, yani vermek zorunda değilsin.
 
-### `PreferenceErrorMapper` — Ktor'un `HttpResponseValidator`'ının karşılığı
+### `errorMapper` — Ktor'un `HttpResponseValidator`'ının karşılığı
 
 `PreferenceListener` **gözlem** kancasıdır: raporlar, hatayı değiştirmez. Çağırana giden hatayı
 **çevirmek** için ayrı bir kanca vardır.
 
 ```kotlin
-fun interface PreferenceErrorMapper {
-    fun map(store: String, key: String?, error: Throwable): Throwable
-
-    companion object { val Passthrough: PreferenceErrorMapper }
-}
+var errorMapper: (store: String, key: String?, error: Throwable) -> Throwable
 ```
+
+`storeFactory` ile aynı şekil: adlandırılmış bir arayüz değil **düz bir fonksiyon tipi**. Ayrı bir
+`fun interface` tanımlamak seni boş yere bir örnek kurmaya zorlardı (`errorMapper = XMapper { … }`);
+böyle doğrudan lambda yazarsın.
 
 Ktor'daki desenin birebir karşılığıdır:
 
@@ -342,9 +340,7 @@ HttpResponseValidator {
 }
 
 // KMemory
-errorMapper = PreferenceErrorMapper { store, key, error ->
-    error.toPreferenceError(PreferenceOperation(store, key))
-}
+errorMapper = { store, key, error -> error.toMemoryError(store, key) }
 ```
 
 **Kütüphane hatayı sınıflandırmaz.** Kendi hata hiyerarşisini dayatmaz, yalnızca çevirme
@@ -356,7 +352,7 @@ uygulamanın bilgisidir. Ktor de böyle yapar.
 | | ne görür | nereye gider |
 |---|---|---|
 | `PreferenceListener.onError` | yalnızca `PreferenceFailure` — tip adı + yığın izi | raporlama (günlükleme, crash reporter) |
-| `PreferenceErrorMapper.map` | orijinal `Throwable` | çağırana fırlatılan hata |
+| `errorMapper` | orijinal `Throwable` | çağırana fırlatılan hata |
 
 Mapper'ın orijinali görmesi mührü delmez: çağıran zaten bugün de orijinali alıyor.
 
@@ -368,7 +364,7 @@ Mapper'ın orijinali görmesi mührü delmez: çağıran zaten bugün de orijina
 eler — iptal bir hata değildir ve başka bir tipe çevrilmesi coroutine iptal zincirini sessizce
 kırardı. (0.3.0 öncesinde iptal `onError`'a da gidiyordu; o da düzeltildi.)
 
-Kanca **opsiyoneldir**: varsayılan `Passthrough` hiçbir şey çevirmez, yani vermeyen kurulumlar
+Kanca **opsiyoneldir**: varsayılanı (`{ _, _, error -> error }`) hiçbir şey çevirmez, yani vermeyen kurulumlar
 0.2.0 davranışını aynen sürdürür.
 
 #### `PreferenceFailure`

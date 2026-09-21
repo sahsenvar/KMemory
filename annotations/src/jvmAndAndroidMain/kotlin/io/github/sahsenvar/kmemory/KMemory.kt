@@ -3,7 +3,6 @@ package io.github.sahsenvar.kmemory
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import io.github.sahsenvar.kmemory.adapter.ReturnAdapter
-import io.github.sahsenvar.kmemory.listener.PreferenceErrorMapper
 import io.github.sahsenvar.kmemory.listener.PreferenceListener
 import kotlinx.serialization.json.Json
 
@@ -28,14 +27,17 @@ import kotlinx.serialization.json.Json
  * @property listener tum kaynaklarin paylastigi yazma/silme/hata dinleyicisi
  * @property adapters tuketicinin kaydettigi donus adaptorleri (tasarim §4.1)
  * @property errorMapper cagirana firlatilacak hatayi ureten kanca; Ktor'un
- *   `HttpResponseValidator` karsiligi. Verilmezse orijinal hata aynen firlatilir.
+ *   `HttpResponseValidator` karsiligi. [storeFactory] gibi duz bir fonksiyon tipidir.
+ *   Verilmezse orijinal hata aynen firlatilir. [CancellationException] buraya HIC ulasmaz:
+ *   uretilen `report` onu once eler.
  */
 public class KMemory internal constructor(
     public val storeFactory: (name: String) -> DataStore<Preferences>,
     public val json: Json,
     public val listener: PreferenceListener,
     public val adapters: List<ReturnAdapter> = emptyList(),
-    public val errorMapper: PreferenceErrorMapper = PreferenceErrorMapper.Passthrough,
+    public val errorMapper: (store: String, key: String?, error: Throwable) -> Throwable =
+        { _, _, error -> error },
 ) {
 
     private val stores = mutableMapOf<String, DataStore<Preferences>>()
@@ -72,10 +74,15 @@ public class KMemoryBuilder {
     /**
      * Cagirana firlatilacak hatayi ureten kanca (Ktor'un `HttpResponseValidator` karsiligi).
      *
-     * Varsayilan [PreferenceErrorMapper.Passthrough] hicbir sey cevirmez, yani bu satiri
-     * yazmayan kurulumlar bugunku davranisi aynen surdurur.
+     * [storeFactory] ile AYNI sekil: adlandirilmis bir arayuz degil duz bir fonksiyon tipi.
+     * Ayri bir `fun interface` tanimlamak tuketiciyi bos yere bir ornek kurmaya zorlardi
+     * (`errorMapper = XMapper { ... }`); boyle dogrudan lambda yazilir.
+     *
+     * Varsayilan hicbir sey cevirmez, yani bu satiri yazmayan kurulumlar onceki davranisi
+     * aynen surdurur.
      */
-    public var errorMapper: PreferenceErrorMapper = PreferenceErrorMapper.Passthrough
+    public var errorMapper: (store: String, key: String?, error: Throwable) -> Throwable =
+        { _, _, error -> error }
 
     public val adapters: MutableList<ReturnAdapter> = mutableListOf()
 

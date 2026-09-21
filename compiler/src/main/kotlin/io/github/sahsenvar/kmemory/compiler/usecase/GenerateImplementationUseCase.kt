@@ -132,7 +132,7 @@ internal class GenerateImplementationUseCase(
         |    private fun report(key: String?, error: Throwable): Throwable {
         |        if (error is CancellationException) return error
         |        listener.onError(STORE_NAME, key, PreferenceFailure.from(STORE_NAME, key, error))
-        |        return errorMapper.map(STORE_NAME, key, error)
+        |        return errorMapper(STORE_NAME, key, error)
         |    }
     """.trimMargin()
 
@@ -155,8 +155,13 @@ internal class GenerateImplementationUseCase(
             add("    private val listener: PreferenceListener = PreferenceListener.None,")
             // Varsayilan deger ZORUNLU: bu parametre 0.3.0'da eklendi ve constructor'i dogrudan
             // cagiran mevcut kod (ornegin kutuphanenin kendi testleri) varsayilan olmadan
-            // DERLENMEZDI. `Passthrough` ayni zamanda "kanca opsiyonel" sozlesmesinin kendisi.
-            add("    private val errorMapper: PreferenceErrorMapper = PreferenceErrorMapper.Passthrough,")
+            // DERLENMEZDI. Kimlik lambda'si ayni zamanda "kanca opsiyonel" sozlesmesinin kendisi.
+            // Tip adlandirilmis bir arayuz DEGIL, duz bir fonksiyon tipi -- `storeFactory` ile
+            // ayni sekil, boylece tuketici bos yere bir ornek kurmaz.
+            add(
+                "    private val errorMapper: (String, String?, Throwable) -> Throwable = " +
+                    "{ _, _, error -> error },"
+            )
         }.joinToString("\n")
 
         return "internal class $implementationName(\n$parameters\n) : $interfaceName {"
