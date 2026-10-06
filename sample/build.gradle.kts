@@ -14,3 +14,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okio)
 }
+
+kotlin {
+    jvmToolchain(21)
+}

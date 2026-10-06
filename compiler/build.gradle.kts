@@ -64,3 +64,7 @@ dependencies {
     testImplementation(libs.datastore.preferences.core)
     testImplementation(libs.kotlinx.serialization.json)
 }
+
+kotlin {
+    jvmToolchain(21)
+}
