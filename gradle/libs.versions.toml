@@ -1,6 +1,6 @@
 [versions]
 # ANDROID
-agp = "8.13.0"
+agp = "9.4.0"
 compileSdk = "36"
 minSdk = "26"
 targetSdk = "36"
@@ -30,13 +30,13 @@ kctfork = "0.13.0"
 koin = "4.2.1"
 
 # KOTLIN
-kotlin = "2.3.21"
+kotlin = "2.4.20"
 kotlinx-coroutines = "1.10.2"
 kotlinx-immutableCollections = "0.4.0"
 kotlinx-serialization = "1.9.0"
 
 # KSP
-ksp = "2.3.9"
+ksp = "2.3.12"
 
 # OKIO
 okio = "3.10.2"
