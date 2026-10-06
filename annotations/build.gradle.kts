@@ -1,5 +1,7 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
 
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.publish)
@@ -7,8 +9,13 @@ plugins {
 }
 
 kotlin {
-    androidTarget()
-    jvm()
+    jvmToolchain(21)
+    androidTarget {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
+    }
+    jvm {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
+    }
     iosArm64()
     iosSimulatorArm64()
 
@@ -47,6 +54,10 @@ android {
     namespace = "io.github.sahsenvar.kmemory"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 }
 
 mavenPublishing {

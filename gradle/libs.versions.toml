@@ -1,6 +1,6 @@
 [versions]
 # ANDROID
-agp = "9.4.0"
+agp = "9.4.1"
 compileSdk = "36"
 minSdk = "26"
 targetSdk = "36"
